@@ -275,6 +275,47 @@
   }
   ::-webkit-scrollbar{width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--line); border-radius:8px;}
+.stage-quick{
+  padding:7px 10px; border:1px solid var(--line); border-radius:8px;
+  background:var(--paper); font-family:Tajawal,sans-serif; font-size:13px;
+  color:var(--ink); max-width:170px;
+}
+/* ===== Mobile: tables become cards ===== */
+@media (max-width: 760px){
+  table, tbody, tr, td { display:block; width:100%; }
+  thead { display:none; }
+  table { border-collapse:separate; }
+  tbody tr {
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    margin-bottom:12px;
+    box-shadow:0 1px 3px rgba(0,0,0,.04);
+  }
+  tbody tr.empty-row { text-align:center; color:var(--muted); padding:22px 14px; }
+  tbody td {
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    border:none;
+    padding:6px 0;
+    text-align:right;
+  }
+  tbody td:empty { display:none; }
+  tbody td::before {
+    content: attr(data-label);
+    font-size:11.5px;
+    color:var(--muted);
+    font-weight:600;
+    flex:0 0 auto;
+  }
+  tbody td[data-label=""]::before { display:none; }
+  tbody tr.empty-row td::before { display:none; }
+  tbody td .row-actions { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+  tbody td .btn.small { padding:8px 16px; font-size:13px; }
+}
 </style>
 </head>
 <body>
@@ -359,6 +400,19 @@ function setSyncStatus(text, kind){
 }
 
 async function loadState(){
+  try{
+    const cached = localStorage.getItem(STORAGE_KEY);
+    if(cached){
+      const d = JSON.parse(cached);
+      state = d;
+      state.products = state.products || [];
+      state.customers = state.customers || [];
+      state.suppliers = state.suppliers || [];
+      state.orders = state.orders || [];
+      state.imports = state.imports || [];
+      render();
+    }
+  }catch(e){}
   setSyncStatus('جاري التحميل...', 'saving');
   try{
     const res = await fetch(SUPA_URL + '/rest/v1/app_data?id=eq.' + ROW_ID + '&select=data', {
@@ -375,6 +429,7 @@ async function loadState(){
       state.orders = state.orders || [];
       state.imports = state.imports || [];
     }
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
     setSyncStatus('متصل', 'ok');
   }catch(e){
     console.error(e);
@@ -383,10 +438,13 @@ async function loadState(){
   render();
 }
 
-let savePending = false;
-async function saveState(){
-  if(savePending) return;
-  savePending = true;
+let saveTimer = null;
+let saveInFlight = false;
+let saveQueued = false;
+
+async function pushState(){
+  if(saveInFlight){ saveQueued = true; return; }
+  saveInFlight = true;
   setSyncStatus('جاري الحفظ...', 'saving');
   try{
     const res = await fetch(SUPA_URL + '/rest/v1/app_data', {
@@ -399,17 +457,22 @@ async function saveState(){
   }catch(e){
     console.error(e);
     setSyncStatus('فشل الحفظ — تحقق من الإنترنت', 'error');
-    showToast('تعذر الحفظ، حاول مرة أخرى');
   }
-  savePending = false;
+  saveInFlight = false;
+  if(saveQueued){ saveQueued = false; pushState(); }
 }
 
-function showToast(msg){
-  const t = document.getElementById('toast');
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'), 2200);
+// Non-blocking: schedules the cloud write, returns immediately.
+function saveState(){
+  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(pushState, 600);
 }
+
+window.addEventListener('beforeunload', ()=>{
+  if(saveTimer){ clearTimeout(saveTimer); pushState(); }
+});
+
 
 /* ---------- Nav ---------- */
 document.querySelectorAll('.nav-item').forEach(el=>{
@@ -430,6 +493,17 @@ const titles = {
   myorders:['تتبع طلبي','أدخل رقم هاتفك لعرض حالة طلباتك'],
 };
 
+function labelTableCells(){
+  document.querySelectorAll('#content table').forEach(tbl=>{
+    const heads = [...tbl.querySelectorAll('thead th')].map(th=>th.textContent.trim());
+    if(!heads.length) return;
+    tbl.querySelectorAll('tbody tr').forEach(tr=>{
+      if(tr.classList.contains('empty-row')) return;
+      [...tr.children].forEach((td,i)=>{ td.setAttribute('data-label', heads[i] || ''); });
+    });
+  });
+}
+
 function render(){
   document.getElementById('pageTitle').textContent = titles[currentView][0];
   document.getElementById('pageSub').textContent = titles[currentView][1];
@@ -437,6 +511,7 @@ function render(){
   if(currentView==='storefront') c.innerHTML = renderStorefront();
   if(currentView==='myorders') c.innerHTML = renderMyOrders();
   bindViewEvents();
+  labelTableCells();
   renderCartFab();
 }
 
