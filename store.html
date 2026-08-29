@@ -200,7 +200,7 @@
 
   /* Product variant chips (storefront quick view) */
   .chip-group{display:flex; flex-wrap:wrap; gap:6px;}
-  .chip{
+  .chip{display:inline-flex; align-items:center; gap:6px;
     padding:6px 12px; border-radius:16px; border:1.5px solid var(--line); font-size:12.5px; cursor:pointer; background:#fff;
   }
   .chip.selected{border-color:var(--brass); background:var(--brass-soft); color:var(--brass); font-weight:700;}
@@ -275,6 +275,31 @@
   }
   ::-webkit-scrollbar{width:8px;}
   ::-webkit-scrollbar-thumb{background:var(--line); border-radius:8px;}
+
+.picker-box{
+  display:flex; flex-wrap:wrap; gap:8px;
+  padding:10px; border:1px solid var(--line); border-radius:10px;
+  background:var(--paper-2, #fbfaf7); margin-bottom:8px;
+}
+.swatch{
+  display:inline-flex; align-items:center; gap:6px;
+  padding:8px 12px; border-radius:20px;
+  border:1.5px solid var(--line); background:var(--paper);
+  font-family:Tajawal,sans-serif; font-size:13px; color:var(--ink);
+  cursor:pointer; transition:all .12s;
+}
+.swatch:active{ transform:scale(.96); }
+.swatch.on{
+  border-color:var(--brass); background:var(--brass-soft);
+  color:var(--brass); font-weight:600;
+}
+.swatch .dot{
+  width:14px; height:14px; border-radius:50%;
+  border:1px solid rgba(0,0,0,.18); display:inline-block;
+}
+.add-row{ display:flex; gap:8px; }
+.add-row input{ flex:1; }
+.picked-line{ font-size:12px; color:var(--muted); margin-top:6px; }
 .stage-quick{
   padding:7px 10px; border:1px solid var(--line); border-radius:8px;
   background:var(--paper); font-family:Tajawal,sans-serif; font-size:13px;
@@ -400,6 +425,7 @@ function setSyncStatus(text, kind){
 }
 
 async function loadState(){
+  // Paint immediately from the local cache so the app never waits on network.
   try{
     const cached = localStorage.getItem(STORAGE_KEY);
     if(cached){
@@ -413,6 +439,7 @@ async function loadState(){
       render();
     }
   }catch(e){}
+
   setSyncStatus('جاري التحميل...', 'saving');
   try{
     const res = await fetch(SUPA_URL + '/rest/v1/app_data?id=eq.' + ROW_ID + '&select=data', {
@@ -473,6 +500,12 @@ window.addEventListener('beforeunload', ()=>{
   if(saveTimer){ clearTimeout(saveTimer); pushState(); }
 });
 
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
 
 /* ---------- Nav ---------- */
 document.querySelectorAll('.nav-item').forEach(el=>{
@@ -493,13 +526,16 @@ const titles = {
   myorders:['تتبع طلبي','أدخل رقم هاتفك لعرض حالة طلباتك'],
 };
 
+
 function labelTableCells(){
   document.querySelectorAll('#content table').forEach(tbl=>{
     const heads = [...tbl.querySelectorAll('thead th')].map(th=>th.textContent.trim());
     if(!heads.length) return;
     tbl.querySelectorAll('tbody tr').forEach(tr=>{
       if(tr.classList.contains('empty-row')) return;
-      [...tr.children].forEach((td,i)=>{ td.setAttribute('data-label', heads[i] || ''); });
+      [...tr.children].forEach((td,i)=>{
+        td.setAttribute('data-label', heads[i] || '');
+      });
     });
   });
 }
@@ -507,9 +543,9 @@ function labelTableCells(){
 function render(){
   document.getElementById('pageTitle').textContent = titles[currentView][0];
   document.getElementById('pageSub').textContent = titles[currentView][1];
-  const c = document.getElementById('content');
-  if(currentView==='storefront') c.innerHTML = renderStorefront();
-  if(currentView==='myorders') c.innerHTML = renderMyOrders();
+  const el = document.getElementById('content');
+  if(currentView==='storefront') el.innerHTML = renderStorefront();
+  if(currentView==='myorders') el.innerHTML = renderMyOrders();
   bindViewEvents();
   labelTableCells();
   renderCartFab();
@@ -654,7 +690,7 @@ function renderOrders(){
       <td>${o.date||'—'}</td>
       <td class="mono">${fmtMoney(orderTotal(o))}</td>
       <td>${statusStamp(o.status)}</td>
-      <td style="font-size:12px;color:var(--ink-soft);">${stageLabel||'—'}</td>
+      <td>${o.type==='sale' ? `<select class="stage-quick" data-stage-order="${o.id}">${ORDER_STAGES.map(s=>`<option value="${s[0]}" ${(o.stage||'new')===s[0]?'selected':''}>${s[1]}</option>`).join('')}</select>` : '<span style="color:var(--muted);font-size:12px;">—</span>'}</td>
       <td>
         <div class="row-actions">
           <button class="btn ghost small" data-view-order="${o.id}">عرض</button>
@@ -1066,18 +1102,18 @@ function renderMyOrders(){
   if(!phone){
     body = `<div class="empty-state"><div class="big">✎</div>أدخل رقم هاتفك أعلاه لعرض طلباتك.</div>`;
   } else {
-    const customer = state.customers.find(c=>c.phone && c.phone === phone);
-    const myOrders = customer ? state.orders.filter(o=>o.type==='sale' && o.partyId===customer.id).sort((a,b)=>b.createdAt-a.createdAt) : [];
-    if(myOrders.length === 0){
+    const customer = state.customers.find(x=>x.phone && x.phone === phone);
+    const mine = customer ? state.orders.filter(o=>o.type==='sale' && o.partyId===customer.id).sort((a,b)=>b.createdAt-a.createdAt) : [];
+    if(mine.length === 0){
       body = `<div class="empty-state"><div class="big">◌</div>لا توجد طلبات مسجّلة بهذا الرقم.</div>`;
     } else {
-      body = myOrders.map(o=>{
+      body = mine.map(o=>{
         const rows = (o.items||[]).map(it=>{
           const prod = state.products.find(p=>p.id===it.productId);
           const variant = [it.color, it.size].filter(Boolean).join(' / ');
           return `<tr><td>${prod?prod.name:'—'}${variant?` <span style="color:var(--muted);font-size:11px;">(${variant})</span>`:''}</td><td class="mono">${it.qty}</td><td class="mono">${fmtMoney(it.qty*it.price)}</td></tr>`;
         }).join('');
-        return `<div class="panel">
+        return `<div class="panel" style="margin-bottom:16px;">
           <div class="panel-head">
             <div class="panel-title mono">${o.number}</div>
             <div style="font-size:12px;color:var(--muted);">${o.date||''}</div>
@@ -1158,7 +1194,7 @@ function storeProductModal(productId){
       <div class="store-price" style="margin-bottom:6px;">${fmtMoney(p.price)}</div>
       <div class="store-stock ${inStock?'in':'out'}" style="margin-bottom:12px;">${inStock?'متوفر ('+p.qty+')':'نفذ من المخزون'}</div>
       ${p.description ? `<div style="font-size:13.5px; color:var(--ink-soft); margin-bottom:14px;">${p.description}</div>` : ''}
-      ${colors.length ? `<div class="field"><label>اللون</label><div class="chip-group" id="colorChips">${colors.map(c=>`<span class="chip" data-color="${c}">${c}</span>`).join('')}</div></div>` : ''}
+      ${colors.length ? `<div class="field"><label>اللون</label><div class="chip-group" id="colorChips">${colors.map(c=>`<span class="chip" data-color="${c}"><span class="dot" style="background:${colorHex(c)}"></span>${c}</span>`).join('')}</div></div>` : ''}
       ${sizes.length ? `<div class="field"><label>الحجم</label><div class="chip-group" id="sizeChips">${sizes.map(s=>`<span class="chip" data-size="${s}">${s}</span>`).join('')}</div></div>` : ''}
     </div>
     <div class="modal-foot">
@@ -1320,6 +1356,87 @@ document.getElementById('overlay').addEventListener('click', (e)=>{
 });
 
 /* ---------- Product Modal ---------- */
+/* ---------- Variant presets & pickers ---------- */
+const COLOR_PALETTE = [
+  ['أسود','#111111'], ['أبيض','#ffffff'], ['رمادي','#8a8a8a'],
+  ['أحمر','#d32f2f'], ['وردي','#e91e8c'], ['برتقالي','#f57c00'],
+  ['أصفر','#fbc02d'], ['أخضر','#388e3c'], ['أزرق','#1976d2'],
+  ['كحلي','#1a237e'], ['سماوي','#03a9f4'], ['بنفسجي','#7b1fa2'],
+  ['بني','#6d4c41'], ['بيج','#d7ccc8'], ['ذهبي','#c9a227'], ['فضي','#c0c0c0']
+];
+
+const SIZE_PRESETS = {
+  'ملابس':    ['XS','S','M','L','XL','XXL','XXXL'],
+  'أحذية':    ['36','37','38','39','40','41','42','43','44','45','46'],
+  'أطفال':    ['0-3 شهور','3-6 شهور','6-12 شهر','1-2 سنة','2-4 سنوات','4-6 سنوات','6-8 سنوات'],
+  'حجم عام':  ['صغير','وسط','كبير','كبير جداً'],
+  'وزن':      ['100غ','250غ','500غ','1كغ','2كغ','5كغ'],
+  'سعة':      ['250مل','500مل','750مل','1لتر','2لتر','5لتر'],
+  'بدون':     []
+};
+
+function parseList(str){
+  return (str||'').split(',').map(s=>s.trim()).filter(Boolean);
+}
+function colorHex(name){
+  const f = COLOR_PALETTE.find(c=>c[0]===name);
+  return f ? f[1] : '#bbbbbb';
+}
+
+// Renders the color swatch picker into #colorPicker
+function drawColorPicker(){
+  const box = document.getElementById('colorPicker');
+  if(!box) return;
+  const chosen = parseList(document.getElementById('f-colors').value);
+  const custom = chosen.filter(n=>!COLOR_PALETTE.some(c=>c[0]===n));
+  const all = COLOR_PALETTE.map(c=>c[0]).concat(custom);
+  box.innerHTML = all.map(name=>{
+    const on = chosen.includes(name);
+    return `<button type="button" class="swatch ${on?'on':''}" data-color="${name}" title="${name}">
+      <span class="dot" style="background:${colorHex(name)}"></span>${name}
+    </button>`;
+  }).join('');
+  box.querySelectorAll('.swatch').forEach(b=>{
+    b.onclick = ()=>{
+      const name = b.dataset.color;
+      let list = parseList(document.getElementById('f-colors').value);
+      if(list.includes(name)) list = list.filter(x=>x!==name);
+      else list.push(name);
+      document.getElementById('f-colors').value = list.join(', ');
+      drawColorPicker();
+    };
+  });
+}
+
+// Renders the size chips into #sizePicker based on the selected preset
+function drawSizePicker(){
+  const box = document.getElementById('sizePicker');
+  if(!box) return;
+  const preset = document.getElementById('f-sizeType').value;
+  const chosen = parseList(document.getElementById('f-sizes').value);
+  const base = SIZE_PRESETS[preset] || [];
+  const custom = chosen.filter(s=>!base.includes(s));
+  const all = base.concat(custom);
+  if(all.length === 0){
+    box.innerHTML = `<div style="font-size:12px;color:var(--muted);">لا مقاسات لهذا النوع</div>`;
+    return;
+  }
+  box.innerHTML = all.map(s=>{
+    const on = chosen.includes(s);
+    return `<button type="button" class="swatch ${on?'on':''}" data-size="${s}">${s}</button>`;
+  }).join('');
+  box.querySelectorAll('.swatch').forEach(b=>{
+    b.onclick = ()=>{
+      const s = b.dataset.size;
+      let list = parseList(document.getElementById('f-sizes').value);
+      if(list.includes(s)) list = list.filter(x=>x!==s);
+      else list.push(s);
+      document.getElementById('f-sizes').value = list.join(', ');
+      drawSizePicker();
+    };
+  });
+}
+
 function productModal(existing){
   const p = existing || {name:'',sku:'',category:'',qty:0,cost:0,price:0,description:'',colors:'',sizes:'',images:''};
   openModal(`
@@ -1339,9 +1456,31 @@ function productModal(existing){
       </div>
       <div class="field"><label>سعر البيع</label><input id="f-price" type="number" value="${p.price}"></div>
       <div class="field"><label>الوصف (يظهر للعملاء في واجهة المتجر)</label><textarea id="f-desc" rows="3">${p.description||''}</textarea></div>
-      <div class="field-row">
-        <div class="field"><label>الألوان (افصل بفاصلة)</label><input id="f-colors" value="${p.colors||''}" placeholder="أحمر, أزرق, أسود"></div>
-        <div class="field"><label>الأحجام (افصل بفاصلة)</label><input id="f-sizes" value="${p.sizes||''}" placeholder="S, M, L"></div>
+      <div class="field">
+        <label>الألوان المتاحة — اضغط لاختيار أو إلغاء</label>
+        <div class="picker-box" id="colorPicker"></div>
+        <div class="add-row">
+          <input id="f-newColor" placeholder="لون غير موجود؟ اكتبه هنا">
+          <button type="button" class="btn ghost small" id="addColorBtn">إضافة</button>
+        </div>
+        <input type="hidden" id="f-colors" value="${p.colors||''}">
+        <div class="picked-line" id="colorsPicked"></div>
+      </div>
+
+      <div class="field">
+        <label>نوع المقاس</label>
+        <select id="f-sizeType">
+          ${Object.keys(SIZE_PRESETS).map(k=>`<option value="${k}" ${(p.sizeType||'بدون')===k?'selected':''}>${k}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>المقاسات المتاحة — اضغط لاختيار أو إلغاء</label>
+        <div class="picker-box" id="sizePicker"></div>
+        <div class="add-row">
+          <input id="f-newSize" placeholder="مقاس غير موجود؟ اكتبه هنا">
+          <button type="button" class="btn ghost small" id="addSizeBtn">إضافة</button>
+        </div>
+        <input type="hidden" id="f-sizes" value="${p.sizes||''}">
       </div>
       <div class="field"><label>روابط الصور (رابط في كل سطر)</label><textarea id="f-images" rows="2" placeholder="https://...">${p.images||''}</textarea></div>
     </div>
@@ -1352,6 +1491,33 @@ function productModal(existing){
   `);
   document.getElementById('closeModal').onclick = closeModal;
   document.getElementById('cancelModal').onclick = closeModal;
+
+  drawColorPicker();
+  drawSizePicker();
+  document.getElementById('f-sizeType').onchange = drawSizePicker;
+
+  document.getElementById('addColorBtn').onclick = ()=>{
+    const inp = document.getElementById('f-newColor');
+    const name = inp.value.trim();
+    if(!name) return;
+    let list = parseList(document.getElementById('f-colors').value);
+    if(!list.includes(name)) list.push(name);
+    document.getElementById('f-colors').value = list.join(', ');
+    inp.value = '';
+    drawColorPicker();
+  };
+
+  document.getElementById('addSizeBtn').onclick = ()=>{
+    const inp = document.getElementById('f-newSize');
+    const s = inp.value.trim();
+    if(!s) return;
+    let list = parseList(document.getElementById('f-sizes').value);
+    if(!list.includes(s)) list.push(s);
+    document.getElementById('f-sizes').value = list.join(', ');
+    inp.value = '';
+    drawSizePicker();
+  };
+
   document.getElementById('saveProduct').onclick = ()=>{
     const name = document.getElementById('f-name').value.trim();
     if(!name){ showToast('الرجاء إدخال اسم المنتج'); return; }
@@ -1365,6 +1531,7 @@ function productModal(existing){
       description: document.getElementById('f-desc').value.trim(),
       colors: document.getElementById('f-colors').value.trim(),
       sizes: document.getElementById('f-sizes').value.trim(),
+      sizeType: document.getElementById('f-sizeType').value,
       images: document.getElementById('f-images').value.trim(),
     };
     if(existing){
@@ -1697,8 +1864,8 @@ function bindViewEvents(){
     b.onclick = ()=>storeProductModal(b.dataset.viewProduct);
   });
 
-  const trackBtn = document.getElementById('trackBtn');
-  if(trackBtn) trackBtn.onclick = ()=>{
+  const tb = document.getElementById('trackBtn');
+  if(tb) tb.onclick = ()=>{
     trackPhone = document.getElementById('trackPhoneInput').value.trim();
     render();
   };
