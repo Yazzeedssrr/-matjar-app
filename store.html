@@ -282,16 +282,10 @@
 <div class="app">
   <div class="sidebar" id="sidebar">
     <div class="brand"><span class="seal">س.ت</span> سجل التجارة</div>
-    <div class="brand-sub">استيراد • تصدير • مخزون</div>
-    <div class="nav-item active" data-view="dashboard"><span class="nav-icon">◈</span> لوحة التحكم</div>
-    <div class="nav-item" data-view="inventory"><span class="nav-icon">▤</span> المخزون</div>
-    <div class="nav-item" data-view="imports"><span class="nav-icon">⛴</span> الاستيراد</div>
-    <div class="nav-item" data-view="orders"><span class="nav-icon">✎</span> الطلبات والفواتير</div>
-    <div class="nav-item" data-view="profits"><span class="nav-icon">◆</span> الأرباح</div>
-    <div class="nav-item" data-view="reports"><span class="nav-icon">▦</span> التقارير</div>
-    <div class="nav-item" data-view="customers"><span class="nav-icon">☺</span> العملاء</div>
-    <div class="nav-item" data-view="suppliers"><span class="nav-icon">⚓</span> الموردين</div>
-    <div class="nav-item" data-view="storefront"><span class="nav-icon">◫</span> واجهة المتجر</div>
+    <div class="brand-sub">متجر الاستيراد</div>
+    <div class="nav-item active" data-view="storefront"><span class="nav-icon">◫</span> المنتجات</div>
+    <div class="nav-item" data-view="myorders"><span class="nav-icon">✎</span> تتبع طلبي</div>
+  </div>
   </div>
 
   <div class="main">
@@ -321,7 +315,7 @@
 let state = { products: [], customers: [], suppliers: [], orders: [], imports: [] };
 let cart = [];
 let reportPeriod = 'week';
-let currentView = 'dashboard';
+let currentView = 'storefront';
 const STORAGE_KEY = 'trade-app-data-v1';
 
 function uid(prefix){ return prefix + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
@@ -432,30 +426,16 @@ document.getElementById('hamburger').addEventListener('click', ()=>{
 });
 
 const titles = {
-  dashboard:['لوحة التحكم','نظرة عامة على نشاطك التجاري'],
-  inventory:['المخزون','إدارة المنتجات والكميات المتوفرة'],
-  orders:['الطلبات والفواتير','طلبات البيع والشراء'],
-  customers:['العملاء','قائمة العملاء وبياناتهم'],
-  suppliers:['الموردين','قائمة الموردين وبياناتهم'],
-  imports:['الاستيراد','تتبع شحنات الاستيراد من الموردين'],
-  storefront:['واجهة المتجر','اعرض منتجاتك وخذ طلبات العملاء مباشرة'],
-  profits:['الأرباح','الربح الفعلي لكل منتج، وتكلفة كل شحنة استيراد'],
-  reports:['التقارير','أداء نشاطك خلال فترة زمنية محددة'],
+  storefront:['منتجاتنا','تصفح المنتجات المتوفرة واطلب مباشرة'],
+  myorders:['تتبع طلبي','أدخل رقم هاتفك لعرض حالة طلباتك'],
 };
 
 function render(){
   document.getElementById('pageTitle').textContent = titles[currentView][0];
   document.getElementById('pageSub').textContent = titles[currentView][1];
   const c = document.getElementById('content');
-  if(currentView==='dashboard') c.innerHTML = renderDashboard();
-  if(currentView==='inventory') c.innerHTML = renderInventory();
-  if(currentView==='orders') c.innerHTML = renderOrders();
-  if(currentView==='customers') c.innerHTML = renderParty('customers');
-  if(currentView==='suppliers') c.innerHTML = renderParty('suppliers');
-  if(currentView==='imports') c.innerHTML = renderImports();
   if(currentView==='storefront') c.innerHTML = renderStorefront();
-  if(currentView==='profits') c.innerHTML = renderProfits();
-  if(currentView==='reports') c.innerHTML = renderReports();
+  if(currentView==='myorders') c.innerHTML = renderMyOrders();
   bindViewEvents();
   renderCartFab();
 }
@@ -1001,6 +981,53 @@ function importViewModal(imp){
   `);
   document.getElementById('closeModal').onclick = closeModal;
   document.getElementById('cancelModal').onclick = closeModal;
+}
+
+/* ---------- My Orders (customer tracking) ---------- */
+let trackPhone = '';
+function renderMyOrders(){
+  const phone = trackPhone.trim();
+  let body = '';
+  if(!phone){
+    body = `<div class="empty-state"><div class="big">✎</div>أدخل رقم هاتفك أعلاه لعرض طلباتك.</div>`;
+  } else {
+    const customer = state.customers.find(c=>c.phone && c.phone === phone);
+    const myOrders = customer ? state.orders.filter(o=>o.type==='sale' && o.partyId===customer.id).sort((a,b)=>b.createdAt-a.createdAt) : [];
+    if(myOrders.length === 0){
+      body = `<div class="empty-state"><div class="big">◌</div>لا توجد طلبات مسجّلة بهذا الرقم.</div>`;
+    } else {
+      body = myOrders.map(o=>{
+        const rows = (o.items||[]).map(it=>{
+          const prod = state.products.find(p=>p.id===it.productId);
+          const variant = [it.color, it.size].filter(Boolean).join(' / ');
+          return `<tr><td>${prod?prod.name:'—'}${variant?` <span style="color:var(--muted);font-size:11px;">(${variant})</span>`:''}</td><td class="mono">${it.qty}</td><td class="mono">${fmtMoney(it.qty*it.price)}</td></tr>`;
+        }).join('');
+        return `<div class="panel">
+          <div class="panel-head">
+            <div class="panel-title mono">${o.number}</div>
+            <div style="font-size:12px;color:var(--muted);">${o.date||''}</div>
+          </div>
+          <div style="padding:16px 18px;">
+            ${stageTrackHtml(o.stage)}
+            <table><thead><tr><th>الصنف</th><th>الكمية</th><th>الإجمالي</th></tr></thead><tbody>${rows}</tbody></table>
+            <div class="order-total">الإجمالي: ${fmtMoney(orderTotal(o))}</div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+  return `
+    <div class="panel" style="padding:16px 18px; margin-bottom:18px;">
+      <div class="field" style="margin-bottom:0;">
+        <label>رقم الهاتف المستخدم في الطلب</label>
+        <div style="display:flex; gap:8px;">
+          <input id="trackPhoneInput" value="${phone}" placeholder="مثال: 0555555555">
+          <button class="btn brass" id="trackBtn">بحث</button>
+        </div>
+      </div>
+    </div>
+    ${body}
+  `;
 }
 
 /* ---------- Storefront ---------- */
@@ -1595,9 +1622,11 @@ function bindViewEvents(){
     b.onclick = ()=>storeProductModal(b.dataset.viewProduct);
   });
 
-  document.querySelectorAll('[data-period]').forEach(b=>{
-    b.onclick = ()=>{ reportPeriod = b.dataset.period; render(); };
-  });
+  const trackBtn = document.getElementById('trackBtn');
+  if(trackBtn) trackBtn.onclick = ()=>{
+    trackPhone = document.getElementById('trackPhoneInput').value.trim();
+    render();
+  };
 }
 
 loadState();
