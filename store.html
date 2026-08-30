@@ -345,6 +345,31 @@
   tbody td .btn.small { padding:8px 16px; font-size:13px; }
 }
 </style>
+<script>
+(function(){
+  // Build the web-app manifest in memory so no extra file is required.
+  var icon = document.querySelector('link[rel="apple-touch-icon"]').getAttribute('href');
+  var manifest = {
+    name: "متجرنا",
+    short_name: "متجرنا",
+    start_url: ".",
+    display: "standalone",
+    background_color: "#f2ede3",
+    theme_color: "#1e2a38",
+    dir: "rtl",
+    lang: "ar",
+    icons: [
+      { src: icon, sizes: "192x192", type: "image/png", purpose: "any" },
+      { src: icon, sizes: "512x512", type: "image/png", purpose: "any" }
+    ]
+  };
+  var blob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+  var link = document.createElement('link');
+  link.rel = 'manifest';
+  link.href = URL.createObjectURL(blob);
+  document.head.appendChild(link);
+})();
+</script>
 </head>
 <body>
 
@@ -381,7 +406,7 @@
 
 <script>
 /* ---------- State ---------- */
-let state = { products: [], customers: [], suppliers: [], orders: [], imports: [] };
+let state = { products: [], customers: [], suppliers: [], orders: [], imports: [], settings: {} };
 let cart = [];
 let reportPeriod = 'week';
 let currentView = 'storefront';
@@ -439,6 +464,7 @@ async function loadState(){
       state.suppliers = state.suppliers || [];
       state.orders = state.orders || [];
       state.imports = state.imports || [];
+      state.settings = state.settings || {};
       render();
     }
   }catch(e){}
@@ -458,6 +484,7 @@ async function loadState(){
       state.suppliers = state.suppliers || [];
       state.orders = state.orders || [];
       state.imports = state.imports || [];
+      state.settings = state.settings || {};
     }
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
     setSyncStatus('متصل', 'ok');
@@ -1297,6 +1324,7 @@ function renderCartModalBody(){
       <div class="field"><label>رقم الهاتف</label><input id="cart-phone" value="${me.phone||''}"></div>
       <div class="field"><label>عنوان التوصيل</label><textarea id="cart-address" rows="2">${me.address||''}</textarea></div>
       ${me.hasSaved ? `<div style="font-size:12px;color:var(--muted);margin-top:-4px;">بياناتك محفوظة — عدّلها إن تغيّرت. <a href="#" id="clearMe" style="color:var(--brass);">مسح</a></div>` : ''}
+      ${paymentSectionHtml()}
     </div>
     <div class="modal-foot">
       <button class="btn brass" id="submitCartOrder" ${cart.length===0?'disabled style="opacity:.5;"':''}>إرسال الطلب</button>
@@ -1305,6 +1333,7 @@ function renderCartModalBody(){
   `);
   document.getElementById('closeModal').onclick = closeModal;
   document.getElementById('cancelModal').onclick = closeModal;
+  bindPaymentPicker();
   const clearMeLink = document.getElementById('clearMe');
   if(clearMeLink) clearMeLink.onclick = (e)=>{
     e.preventDefault();
@@ -1353,6 +1382,9 @@ function renderCartModalBody(){
       status: 'pending',
       stage: 'new',
       address,
+      payMethod: selectedPayMethod,
+      payProof: (document.getElementById('cart-proof')||{}).value || '',
+      paid: false,
       items: cart.map(c=>{
         const prod = state.products.find(p=>p.id===c.productId);
         return {productId:c.productId, qty:c.qty, price:prod?prod.price:0, color:c.color, size:c.size};
@@ -1371,6 +1403,76 @@ function renderCartModalBody(){
 }
 
 /* ---------- Modal helpers ---------- */
+/* ---------- Payment options shown to the customer ---------- */
+function payMethods(){
+  const s = state.settings || {};
+  const out = [];
+  if(s.bankOn){
+    const lines = [];
+    if(s.bankName)   lines.push('البنك: ' + s.bankName);
+    if(s.bankHolder) lines.push('باسم: ' + s.bankHolder);
+    if(s.bankAcct)   lines.push('الحساب: ' + s.bankAcct);
+    out.push({id:'bank', label:'تحويل بنكي', details: lines.join('<br>')});
+  }
+  if(s.zelleOn){
+    out.push({id:'zelle', label:'Zelle', details: s.zelle ? ('أرسل إلى: ' + s.zelle) : ''});
+  }
+  if(s.cashOn){
+    const lines = [];
+    if(s.cashapp) lines.push('Cash App: ' + s.cashapp);
+    if(s.venmo)   lines.push('Venmo: ' + s.venmo);
+    out.push({id:'cash', label:'Cash App / Venmo', details: lines.join('<br>')});
+  }
+  return out;
+}
+
+function paymentSectionHtml(){
+  const methods = payMethods();
+  const s = state.settings || {};
+  if(methods.length === 0){
+    return `<div style="font-size:12.5px;color:var(--muted);margin-top:14px;">
+      سيتم التواصل معك بخصوص الدفع بعد استلام الطلب.
+    </div>`;
+  }
+  return `
+    <div class="field" style="margin-top:18px;">
+      <label>طريقة الدفع</label>
+      <div class="chip-group" id="payChips">
+        ${methods.map((m,i)=>`<span class="chip ${i===0?'selected':''}" data-pay="${m.id}">${m.label}</span>`).join('')}
+      </div>
+    </div>
+    <div id="payDetails" class="pay-details"></div>
+    ${s.note ? `<div style="font-size:12.5px;color:var(--ink-soft);margin-bottom:10px;">${s.note}</div>` : ''}
+    <div class="field">
+      <label>رقم التحويل أو رابط الإيصال (اختياري الآن)</label>
+      <input id="cart-proof" placeholder="الصق رقم العملية أو رابط صورة الإيصال">
+    </div>
+  `;
+}
+
+function bindPaymentPicker(){
+  const box = document.getElementById('payChips');
+  if(!box) return;
+  const methods = payMethods();
+  const show = (id)=>{
+    const m = methods.find(x=>x.id===id);
+    const d = document.getElementById('payDetails');
+    if(d) d.innerHTML = (m && m.details) ? m.details : '';
+  };
+  box.querySelectorAll('.chip').forEach(ch=>{
+    ch.onclick = ()=>{
+      box.querySelectorAll('.chip').forEach(x=>x.classList.remove('selected'));
+      ch.classList.add('selected');
+      selectedPayMethod = ch.dataset.pay;
+      show(selectedPayMethod);
+    };
+  });
+  selectedPayMethod = methods.length ? methods[0].id : '';
+  show(selectedPayMethod);
+}
+
+let selectedPayMethod = '';
+
 /* ---------- Saved customer profile (this device only) ---------- */
 const ME_KEY = 'matjar-my-info';
 
@@ -1934,6 +2036,48 @@ document.addEventListener('focusout', (e)=>{
     if(!a || !a.matches('input, select, textarea')) resetZoom();
   }, 100);
 });
+
+
+/* ---------- Add to home screen ---------- */
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstall = e;
+  showInstallBar();
+});
+
+function isStandalone(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function showInstallBar(){
+  if(isStandalone()) return;
+  if(localStorage.getItem('install-dismissed')) return;
+  if(document.getElementById('installBar')) return;
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const bar = document.createElement('div');
+  bar.id = 'installBar';
+  bar.innerHTML = isIOS
+    ? `<span>ثبّت التطبيق: اضغط <b>مشاركة</b> ⬆ ثم <b>إضافة إلى الشاشة الرئيسية</b></span><button id="dismissInstall">✕</button>`
+    : `<span>ثبّت التطبيق على جهازك</span><button id="doInstall">تثبيت</button><button id="dismissInstall">✕</button>`;
+  document.body.appendChild(bar);
+
+  const di = document.getElementById('doInstall');
+  if(di) di.onclick = async ()=>{
+    if(!deferredInstall) return;
+    deferredInstall.prompt();
+    await deferredInstall.userChoice;
+    deferredInstall = null;
+    bar.remove();
+  };
+  document.getElementById('dismissInstall').onclick = ()=>{
+    localStorage.setItem('install-dismissed','1');
+    bar.remove();
+  };
+}
+
+setTimeout(()=>{ if(/iPad|iPhone|iPod/.test(navigator.userAgent)) showInstallBar(); }, 2500);
 
 loadState();
 </script>
