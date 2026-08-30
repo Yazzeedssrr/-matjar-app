@@ -1098,7 +1098,7 @@ function importViewModal(imp){
 }
 
 /* ---------- My Orders (customer tracking) ---------- */
-let trackPhone = '';
+let trackPhone = (loadMyInfo().phone) || '';
 function renderMyOrders(){
   const phone = trackPhone.trim();
   let body = '';
@@ -1256,6 +1256,19 @@ function openCartModal(){
   renderCartModalBody();
 }
 function renderCartModalBody(){
+  // Keep anything already typed; fall back to the saved profile.
+  const live = {
+    name:    (document.getElementById('cart-name')||{}).value,
+    phone:   (document.getElementById('cart-phone')||{}).value,
+    address: (document.getElementById('cart-address')||{}).value,
+  };
+  const saved = loadMyInfo();
+  const me = {
+    name:    live.name    !== undefined ? live.name    : (saved.name||''),
+    phone:   live.phone   !== undefined ? live.phone   : (saved.phone||''),
+    address: live.address !== undefined ? live.address : (saved.address||''),
+    hasSaved: !!saved.name,
+  };
   const rows = cart.map(c=>{
     const prod = state.products.find(p=>p.id===c.productId);
     if(!prod) return '';
@@ -1280,9 +1293,10 @@ function renderCartModalBody(){
     <div class="modal-body">
       ${rows || '<div style="color:var(--muted);font-size:13px;">السلة فارغة</div>'}
       <div class="order-total">الإجمالي: ${fmtMoney(total)}</div>
-      <div class="field" style="margin-top:16px;"><label>اسم العميل</label><input id="cart-name"></div>
-      <div class="field"><label>رقم الهاتف</label><input id="cart-phone"></div>
-      <div class="field"><label>عنوان التوصيل</label><textarea id="cart-address" rows="2"></textarea></div>
+      <div class="field" style="margin-top:16px;"><label>اسم العميل</label><input id="cart-name" value="${me.name||''}"></div>
+      <div class="field"><label>رقم الهاتف</label><input id="cart-phone" value="${me.phone||''}"></div>
+      <div class="field"><label>عنوان التوصيل</label><textarea id="cart-address" rows="2">${me.address||''}</textarea></div>
+      ${me.hasSaved ? `<div style="font-size:12px;color:var(--muted);margin-top:-4px;">بياناتك محفوظة — عدّلها إن تغيّرت. <a href="#" id="clearMe" style="color:var(--brass);">مسح</a></div>` : ''}
     </div>
     <div class="modal-foot">
       <button class="btn brass" id="submitCartOrder" ${cart.length===0?'disabled style="opacity:.5;"':''}>إرسال الطلب</button>
@@ -1291,6 +1305,16 @@ function renderCartModalBody(){
   `);
   document.getElementById('closeModal').onclick = closeModal;
   document.getElementById('cancelModal').onclick = closeModal;
+  const clearMeLink = document.getElementById('clearMe');
+  if(clearMeLink) clearMeLink.onclick = (e)=>{
+    e.preventDefault();
+    clearMyInfo();
+    document.getElementById('cart-name').value = '';
+    document.getElementById('cart-phone').value = '';
+    document.getElementById('cart-address').value = '';
+    clearMeLink.parentElement.remove();
+    showToast('تم مسح بياناتك المحفوظة');
+  };
   document.querySelectorAll('[data-cart-inc]').forEach(b=>{
     b.onclick = ()=>{
       const line = cart.find(c=>cartKey(c.productId,c.color,c.size)===b.dataset.cartInc);
@@ -1312,6 +1336,7 @@ function renderCartModalBody(){
     const phone = document.getElementById('cart-phone').value.trim();
     const address = document.getElementById('cart-address').value.trim();
     if(!name){ showToast('الرجاء إدخال اسم العميل'); return; }
+    saveMyInfo({name, phone, address});
     let customer = state.customers.find(c=>phone && c.phone===phone);
     if(!customer){
       customer = {id:uid('c'), name, phone, address, notes:'طلب عبر واجهة المتجر'};
@@ -1346,13 +1371,41 @@ function renderCartModalBody(){
 }
 
 /* ---------- Modal helpers ---------- */
+/* ---------- Saved customer profile (this device only) ---------- */
+const ME_KEY = 'matjar-my-info';
+
+function loadMyInfo(){
+  try{ return JSON.parse(localStorage.getItem(ME_KEY)) || {}; }
+  catch(e){ return {}; }
+}
+function saveMyInfo(info){
+  try{ localStorage.setItem(ME_KEY, JSON.stringify(info)); }catch(e){}
+}
+function clearMyInfo(){
+  try{ localStorage.removeItem(ME_KEY); }catch(e){}
+}
+
 function openModal(html){
   document.getElementById('modalBox').innerHTML = html;
   document.getElementById('overlay').classList.add('show');
 }
+function resetZoom(){
+  // iOS keeps the page zoomed after a field loses focus. Toggling
+  // maximum-scale forces Safari to snap back to 1.0.
+  const vp = document.querySelector('meta[name="viewport"]');
+  if(!vp) return;
+  const base = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
+  vp.setAttribute('content', base + ', maximum-scale=1.0, user-scalable=0');
+  setTimeout(()=>{ vp.setAttribute('content', base + ', maximum-scale=5.0'); }, 350);
+}
+
 function closeModal(){
+  // Drop focus first, otherwise the keyboard keeps the page zoomed.
+  const a = document.activeElement;
+  if(a && a.blur) a.blur();
   document.getElementById('overlay').classList.remove('show');
   document.getElementById('modalBox').innerHTML = '';
+  resetZoom();
 }
 document.getElementById('overlay').addEventListener('click', (e)=>{
   if(e.target.id==='overlay') closeModal();
@@ -1873,6 +1926,14 @@ function bindViewEvents(){
     render();
   };
 }
+
+document.addEventListener('focusout', (e)=>{
+  if(!e.target.matches('input, select, textarea')) return;
+  setTimeout(()=>{
+    const a = document.activeElement;
+    if(!a || !a.matches('input, select, textarea')) resetZoom();
+  }, 100);
+});
 
 loadState();
 </script>
