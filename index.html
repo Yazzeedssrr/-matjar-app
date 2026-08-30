@@ -1168,7 +1168,7 @@ function storeProductModal(productId){
       <div class="store-price" style="margin-bottom:6px;">${fmtMoney(p.price)}</div>
       <div class="store-stock ${inStock?'in':'out'}" style="margin-bottom:12px;">${inStock?'متوفر ('+p.qty+')':'نفذ من المخزون'}</div>
       ${p.description ? `<div style="font-size:13.5px; color:var(--ink-soft); margin-bottom:14px;">${p.description}</div>` : ''}
-      ${colors.length ? `<div class="field"><label>اللون</label><div class="chip-group" id="colorChips">${colors.map(c=>`<span class="chip" data-color="${c}"><span class="dot" style="background:${colorHex(c)}"></span>${c}</span>`).join('')}</div></div>` : ''}
+      ${colors.length ? `<div class="field"><label>اللون</label><div class="chip-group" id="colorChips">${colors.map(c=>`<span class="chip" data-color="${c}"><span style="display:inline-block;width:15px;height:15px;min-width:15px;border-radius:50%;background:${colorHex(c)};border:1px solid rgba(0,0,0,.2);vertical-align:middle;margin-left:6px;"></span>${c}</span>`).join('')}</div></div>` : ''}
       ${sizes.length ? `<div class="field"><label>الحجم</label><div class="chip-group" id="sizeChips">${sizes.map(s=>`<span class="chip" data-size="${s}">${s}</span>`).join('')}</div></div>` : ''}
     </div>
     <div class="modal-foot">
