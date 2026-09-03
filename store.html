@@ -610,10 +610,16 @@ function navIsOpen(){
 
 const installEntry = document.getElementById('navInstall');
 if(installEntry){
-  if(isStandalone()) installEntry.style.display = 'none';
+  if(isStandalone()){
+    installEntry.innerHTML = '<span class="nav-icon">✓</span> التطبيق مثبّت';
+  }
   installEntry.addEventListener('click', (e)=>{
     e.stopPropagation();
     closeNav();
+    if(isStandalone()){
+      setTimeout(()=>showToast('التطبيق مثبّت بالفعل على جهازك'), 220);
+      return;
+    }
     setTimeout(showInstallBar, 220);
   });
 }

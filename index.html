@@ -261,6 +261,8 @@
   .type-badge{font-size:11px; font-weight:700; padding:3px 9px; border-radius:5px;}
   .type-badge.sale{background:var(--green-soft); color:var(--green);}
   .type-badge.purchase{background:var(--brass-soft); color:var(--brass);}
+  .type-badge.expense{background:var(--brick-soft); color:var(--brick);}
+  .type-badge.income{background:var(--green-soft); color:var(--green);}
 
   .hamburger{display:none;}
   @media (max-width: 820px){
@@ -440,6 +442,7 @@
     <div class="nav-item" data-view="reports"><span class="nav-icon">▦</span> التقارير</div>
     <div class="nav-item" data-view="customers"><span class="nav-icon">☺</span> العملاء</div>
     <div class="nav-item" data-view="suppliers"><span class="nav-icon">⚓</span> الموردين</div>
+    <div class="nav-item" data-view="finance"><span class="nav-icon">💰</span> الماليات</div>
     <div class="nav-item" data-view="storefront"><span class="nav-icon">◫</span> واجهة المتجر</div>
     <div class="nav-item" data-view="settings"><span class="nav-icon">⚙</span> إعدادات الدفع</div>
     <div class="nav-item" id="navInstall"><span class="nav-icon">⤓</span> تثبيت التطبيق</div>
@@ -469,7 +472,7 @@
 
 <script>
 /* ---------- State ---------- */
-let state = { products: [], customers: [], suppliers: [], orders: [], imports: [], settings: {} };
+let state = { products: [], customers: [], suppliers: [], orders: [], imports: [], settings: {}, finance: {} };
 let cart = [];
 let reportPeriod = 'week';
 let currentView = 'dashboard';
@@ -528,6 +531,11 @@ async function loadState(){
       state.orders = state.orders || [];
       state.imports = state.imports || [];
       state.settings = state.settings || {};
+      state.finance = state.finance || {};
+      state.finance.incomes = state.finance.incomes || [];
+      state.finance.expenses = state.finance.expenses || [];
+      state.finance.incomeSources = state.finance.incomeSources || DEFAULT_INCOME_SOURCES.slice();
+      state.finance.expenseCategories = state.finance.expenseCategories || DEFAULT_EXPENSE_CATEGORIES.slice();
       render();
     }
   }catch(e){}
@@ -548,6 +556,11 @@ async function loadState(){
       state.orders = state.orders || [];
       state.imports = state.imports || [];
       state.settings = state.settings || {};
+      state.finance = state.finance || {};
+      state.finance.incomes = state.finance.incomes || [];
+      state.finance.expenses = state.finance.expenses || [];
+      state.finance.incomeSources = state.finance.incomeSources || DEFAULT_INCOME_SOURCES.slice();
+      state.finance.expenseCategories = state.finance.expenseCategories || DEFAULT_EXPENSE_CATEGORIES.slice();
     }
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
     setSyncStatus('متصل', 'ok');
@@ -617,10 +630,16 @@ function navIsOpen(){
 
 const installEntry = document.getElementById('navInstall');
 if(installEntry){
-  if(isStandalone()) installEntry.style.display = 'none';
+  if(isStandalone()){
+    installEntry.innerHTML = '<span class="nav-icon">✓</span> التطبيق مثبّت';
+  }
   installEntry.addEventListener('click', (e)=>{
     e.stopPropagation();
     closeNav();
+    if(isStandalone()){
+      setTimeout(()=>showToast('التطبيق مثبّت بالفعل على جهازك'), 220);
+      return;
+    }
     setTimeout(showInstallBar, 220);
   });
 }
@@ -678,6 +697,7 @@ const titles = {
   storefront:['واجهة المتجر','اعرض منتجاتك وخذ طلبات العملاء مباشرة'],
   profits:['الأرباح','الربح الفعلي لكل منتج، وتكلفة كل شحنة استيراد'],
   reports:['التقارير','أداء نشاطك خلال فترة زمنية محددة'],
+  finance:['الماليات','دخلك، مصروفاتك، وصافي ربحك'],
 };
 
 
@@ -708,6 +728,7 @@ function render(){
   if(currentView==='settings') c.innerHTML = renderSettings();
   if(currentView==='profits') c.innerHTML = renderProfits();
   if(currentView==='reports') c.innerHTML = renderReports();
+  if(currentView==='finance') c.innerHTML = renderFinance();
   bindViewEvents();
   labelTableCells();
   renderCartFab();
@@ -1598,6 +1619,224 @@ document.getElementById('overlay').addEventListener('click', (e)=>{
   if(e.target.id==='overlay') closeModal();
 });
 
+/* ---------- Finance ---------- */
+const DEFAULT_INCOME_SOURCES = ['DoorDash','Amazon Flex','Uber','راتب','مشروع','بيع منتجات','عمل حر','دخل آخر'];
+const DEFAULT_EXPENSE_CATEGORIES = ['الوقود','الطعام','السيارة','الصيانة','التأمين','الهاتف','الإنترنت','الإيجار','المشتريات','أدوات العمل','رسوم وتكاليف','مصروف شخصي','مصروف آخر'];
+
+function financeArr(kind){ return kind==='income' ? state.finance.incomes : state.finance.expenses; }
+function financeListKey(kind){ return kind==='income' ? 'incomeSources' : 'expenseCategories'; }
+function financeLabelField(kind){ return kind==='income' ? 'source' : 'category'; }
+
+function isSameDay(dateStr, d){ return dateStr === d; }
+function isSameWeek(dateStr, ref){
+  const d1 = new Date(dateStr), d2 = new Date(ref);
+  const day1 = new Date(d1); day1.setDate(d1.getDate() - ((d1.getDay()+1)%7)); // week starts Sunday
+  const day2 = new Date(d2); day2.setDate(d2.getDate() - ((d2.getDay()+1)%7));
+  return day1.toDateString() === day2.toDateString();
+}
+function isSameMonth(dateStr, ref){
+  const d1 = new Date(dateStr), d2 = new Date(ref);
+  return d1.getFullYear()===d2.getFullYear() && d1.getMonth()===d2.getMonth();
+}
+
+function financeSum(kind, filterFn){
+  return financeArr(kind).filter(filterFn||(()=>true)).reduce((s,x)=>s+Number(x.amount||0),0);
+}
+
+function renderFinance(){
+  const today = todayStr();
+  const totalIncome = financeSum('income');
+  const totalExpense = financeSum('expense');
+  const net = totalIncome - totalExpense;
+
+  const todayIncome = financeSum('income', x=>isSameDay(x.date, today));
+  const todayExpense = financeSum('expense', x=>isSameDay(x.date, today));
+  const todayNet = todayIncome - todayExpense;
+
+  const monthIncome = financeSum('income', x=>isSameMonth(x.date, today));
+  const monthExpense = financeSum('expense', x=>isSameMonth(x.date, today));
+  const monthNet = monthIncome - monthExpense;
+
+  // Per-source profit breakdown
+  const sourceMap = {};
+  state.finance.incomes.forEach(x=>{
+    const k = x.source || 'دخل آخر';
+    sourceMap[k] = sourceMap[k] || {income:0, expense:0};
+    sourceMap[k].income += Number(x.amount||0);
+  });
+  state.finance.expenses.forEach(x=>{
+    if(!x.linkedSource) return;
+    const k = x.linkedSource;
+    sourceMap[k] = sourceMap[k] || {income:0, expense:0};
+    sourceMap[k].expense += Number(x.amount||0);
+  });
+  let sourceRows = Object.keys(sourceMap).map(k=>{
+    const v = sourceMap[k];
+    const p = v.income - v.expense;
+    return `<tr>
+      <td>${k}</td>
+      <td class="mono">${fmtMoney(v.income)}</td>
+      <td class="mono">${fmtMoney(v.expense)}</td>
+      <td class="mono ${p<0?'warn':'ok'}" style="font-weight:800;">${fmtMoney(p)}</td>
+    </tr>`;
+  }).join('');
+  if(!sourceRows) sourceRows = `<tr class="empty-row"><td colspan="4">لا توجد بيانات بعد</td></tr>`;
+
+  // Transactions list (merged, sorted)
+  const txns = [
+    ...state.finance.incomes.map(x=>({...x, kind:'income'})),
+    ...state.finance.expenses.map(x=>({...x, kind:'expense'}))
+  ].sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+
+  let rows = txns.map(t=>{
+    const label = t.kind==='income' ? (t.source||'—') : (t.category||'—');
+    return `<tr>
+      <td><span class="type-badge ${t.kind}">${t.kind==='income'?'دخل':'مصروف'}</span></td>
+      <td>${label}</td>
+      <td class="mono ${t.kind==='income'?'ok':'warn'}" style="font-weight:800;">${t.kind==='income'?'+':'-'}${fmtMoney(t.amount)}</td>
+      <td class="mono">${t.date}</td>
+      <td>${t.notes||'—'}</td>
+      <td>
+        <div class="row-actions">
+          <button class="btn ghost small" data-edit-finance="${t.kind}:${t.id}">تعديل</button>
+          <button class="btn danger small" data-del-finance="${t.kind}:${t.id}">حذف</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+  if(!rows) rows = `<tr class="empty-row"><td colspan="6">لا توجد عمليات بعد — ابدأ بإضافة دخل أو مصروف</td></tr>`;
+
+  return `
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-label">إجمالي الدخل</div><div class="stat-value ok mono">${fmtMoney(totalIncome)}</div></div>
+    <div class="stat-card"><div class="stat-label">إجمالي المصروفات</div><div class="stat-value warn mono">${fmtMoney(totalExpense)}</div></div>
+    <div class="stat-card"><div class="stat-label">${net>=0?'صافي الربح':'صافي الخسارة'}</div><div class="stat-value ${net>=0?'ok':'warn'} mono">${fmtMoney(net)}</div></div>
+    <div class="stat-card"><div class="stat-label">صافي اليوم</div><div class="stat-value ${todayNet>=0?'ok':'warn'} mono">${fmtMoney(todayNet)}</div></div>
+    <div class="stat-card"><div class="stat-label">صافي هذا الشهر</div><div class="stat-value ${monthNet>=0?'ok':'warn'} mono">${fmtMoney(monthNet)}</div></div>
+    <div class="stat-card"><div class="stat-label">عدد العمليات</div><div class="stat-value">${txns.length}</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">إضافة عملية</div>
+      <div class="row-actions">
+        <button class="btn brass" id="addIncomeBtn">+ إضافة دخل</button>
+        <button class="btn danger" id="addExpenseBtn">+ إضافة مصروف</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">الربح حسب المصدر</div></div>
+    <table><thead><tr><th>المصدر</th><th>الدخل</th><th>المصروف</th><th>صافي الربح</th></tr></thead>
+    <tbody>${sourceRows}</tbody></table>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><div class="panel-title">سجل العمليات المالية (${txns.length})</div></div>
+    <table><thead><tr><th>النوع</th><th>المصدر/الفئة</th><th>المبلغ</th><th>التاريخ</th><th>ملاحظات</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table>
+  </div>`;
+}
+
+function financePicker(kind, selected){
+  const list = state.finance[financeListKey(kind)] || [];
+  return list.map(name=>`<button type="button" class="btn ${name===selected?'brass':'ghost'} small finance-opt" data-val="${name}" style="margin:3px;">${name}</button>`).join('');
+}
+
+function financeModal(kind, existing){
+  const isIncome = kind==='income';
+  const x = existing || { amount:'', date: todayStr(), notes:'', linkedSource:'' };
+  const labelField = financeLabelField(kind);
+  const selectedVal = existing ? existing[labelField] : (state.finance[financeListKey(kind)][0]||'');
+
+  const linkedSourceField = isIncome ? '' : `
+    <div class="field">
+      <label>مرتبط بمصدر دخل (اختياري)</label>
+      <select id="f-linkedSource">
+        <option value="">بدون ربط</option>
+        ${state.finance.incomeSources.map(s=>`<option value="${s}" ${x.linkedSource===s?'selected':''}>${s}</option>`).join('')}
+      </select>
+    </div>`;
+
+  openModal(`
+    <div class="modal-head">
+      <div class="modal-title">${existing? (isIncome?'تعديل دخل':'تعديل مصروف') : (isIncome?'إضافة دخل':'إضافة مصروف')}</div>
+      <div class="close-x" id="closeModal">×</div>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>المبلغ</label><input id="f-amount" type="number" value="${x.amount}" placeholder="0.00"></div>
+      <div class="field">
+        <label>${isIncome?'مصدر الدخل':'نوع المصروف'} — اضغط للاختيار</label>
+        <div id="financePickerBox">${financePicker(kind, selectedVal)}</div>
+        <input type="hidden" id="f-source" value="${selectedVal}">
+        <div class="add-row">
+          <input id="f-newSource" placeholder="${isIncome?'مصدر جديد؟ اكتبه هنا':'فئة جديدة؟ اكتبها هنا'}">
+          <button type="button" class="btn ghost small" id="addSourceBtn">إضافة</button>
+        </div>
+      </div>
+      <div class="field"><label>التاريخ</label><input id="f-date" type="date" value="${x.date||todayStr()}"></div>
+      ${linkedSourceField}
+      <div class="field"><label>ملاحظات</label><textarea id="f-notes" rows="2">${x.notes||''}</textarea></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ${isIncome?'brass':'danger'}" id="saveFinance">${existing?'حفظ التعديلات':'حفظ'}</button>
+      <button class="btn ghost" id="cancelModal">إلغاء</button>
+    </div>
+  `);
+  document.getElementById('closeModal').onclick = closeModal;
+  document.getElementById('cancelModal').onclick = closeModal;
+
+  function bindPickerClicks(){
+    document.querySelectorAll('.finance-opt').forEach(b=>{
+      b.onclick = ()=>{
+        document.getElementById('f-source').value = b.dataset.val;
+        document.querySelectorAll('.finance-opt').forEach(o=>o.classList.remove('brass'));
+        document.querySelectorAll('.finance-opt').forEach(o=>o.classList.add('ghost'));
+        b.classList.remove('ghost'); b.classList.add('brass');
+      };
+    });
+  }
+  bindPickerClicks();
+
+  document.getElementById('addSourceBtn').onclick = ()=>{
+    const inp = document.getElementById('f-newSource');
+    const name = inp.value.trim();
+    if(!name) return;
+    const key = financeListKey(kind);
+    if(!state.finance[key].includes(name)) state.finance[key].push(name);
+    document.getElementById('f-source').value = name;
+    document.getElementById('financePickerBox').innerHTML = financePicker(kind, name);
+    bindPickerClicks();
+    inp.value = '';
+    saveState();
+  };
+
+  document.getElementById('saveFinance').onclick = ()=>{
+    const amount = Number(document.getElementById('f-amount').value);
+    if(!amount || amount<=0){ showToast('الرجاء إدخال مبلغ صحيح'); return; }
+    const source = document.getElementById('f-source').value || (isIncome?'دخل آخر':'مصروف آخر');
+    const date = document.getElementById('f-date').value || todayStr();
+    const notes = document.getElementById('f-notes').value.trim();
+    const linkedSource = isIncome ? '' : (document.getElementById('f-linkedSource') ? document.getElementById('f-linkedSource').value : '');
+
+    if(existing){
+      existing.amount = amount;
+      existing[labelField] = source;
+      existing.date = date;
+      existing.notes = notes;
+      if(!isIncome) existing.linkedSource = linkedSource;
+    } else {
+      const rec = { id: uid(kind), amount, date, notes, createdAt: Date.now() };
+      rec[labelField] = source;
+      if(!isIncome) rec.linkedSource = linkedSource;
+      financeArr(kind).push(rec);
+    }
+    saveState(); render(); closeModal();
+    showToast(existing ? 'تم حفظ التعديلات' : (isIncome?'تم إضافة الدخل':'تم إضافة المصروف'));
+  };
+}
+
 /* ---------- Product Modal ---------- */
 /* ---------- Payment settings ---------- */
 function renderSettings(){
@@ -2096,6 +2335,28 @@ function orderViewModal(o){
 
 /* ---------- Event binding per view ---------- */
 function bindViewEvents(){
+  const addIncomeBtn = document.getElementById('addIncomeBtn');
+  if(addIncomeBtn) addIncomeBtn.onclick = ()=>financeModal('income', null);
+  const addExpenseBtn = document.getElementById('addExpenseBtn');
+  if(addExpenseBtn) addExpenseBtn.onclick = ()=>financeModal('expense', null);
+
+  document.querySelectorAll('[data-edit-finance]').forEach(b=>{
+    b.onclick = ()=>{
+      const [kind,id] = b.dataset.editFinance.split(':');
+      const item = financeArr(kind).find(x=>x.id===id);
+      financeModal(kind, item);
+    };
+  });
+  document.querySelectorAll('[data-del-finance]').forEach(b=>{
+    b.onclick = ()=>{
+      if(!confirm('حذف هذه العملية؟')) return;
+      const [kind,id] = b.dataset.delFinance.split(':');
+      if(kind==='income') state.finance.incomes = state.finance.incomes.filter(x=>x.id!==id);
+      else state.finance.expenses = state.finance.expenses.filter(x=>x.id!==id);
+      saveState(); render(); showToast('تم الحذف');
+    };
+  });
+
   const addProductBtn = document.getElementById('addProductBtn');
   if(addProductBtn) addProductBtn.onclick = ()=>productModal(null);
 
