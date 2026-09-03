@@ -92,15 +92,46 @@
   .stat-card{
     background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
     padding:16px 18px; box-shadow:var(--shadow);
+    position:relative; overflow:hidden;
+    transition:transform .15s ease, box-shadow .15s ease;
+    animation:cardIn .4s cubic-bezier(.2,.9,.3,1.2) both;
   }
-  .stat-label{font-size:12px; color:var(--muted); margin-bottom:6px;}
-  .stat-value{font-family:'JetBrains Mono',monospace; font-size:24px; font-weight:700; color:var(--ink);}
+  .stat-card::before{content:''; position:absolute; top:0; right:0; left:0; height:4px; background:var(--brass);}
+  .stat-card:has(.stat-value.ok)::before{background:var(--green);}
+  .stat-card:has(.stat-value.warn)::before{background:var(--brick);}
+  .stat-card:active{transform:scale(.96); box-shadow:0 1px 4px rgba(30,42,56,0.1);}
+  .stat-grid .stat-card:nth-child(1){animation-delay:.02s}
+  .stat-grid .stat-card:nth-child(2){animation-delay:.06s}
+  .stat-grid .stat-card:nth-child(3){animation-delay:.10s}
+  .stat-grid .stat-card:nth-child(4){animation-delay:.14s}
+  .stat-grid .stat-card:nth-child(5){animation-delay:.18s}
+  .stat-grid .stat-card:nth-child(6){animation-delay:.22s}
+  @keyframes cardIn{from{opacity:0; transform:translateY(10px) scale(.98);} to{opacity:1; transform:translateY(0) scale(1);}}
+  .stat-label{font-size:12px; color:var(--muted); margin-bottom:6px; display:flex; align-items:center; gap:5px;}
+  .stat-value{font-family:'JetBrains Mono',monospace; font-size:24px; font-weight:700; color:var(--ink); animation:valuePop .35s ease both .08s;}
   .stat-value.warn{color:var(--brick);}
   .stat-value.ok{color:var(--green);}
+  @keyframes valuePop{from{opacity:0; transform:scale(.85);} to{opacity:1; transform:scale(1);}}
+
+  .motiv-banner{
+    display:flex; align-items:center; gap:12px;
+    background:linear-gradient(100deg, var(--brass-soft), var(--surface));
+    border:1px solid var(--brass); border-radius:var(--radius);
+    padding:14px 18px; margin-bottom:20px;
+    box-shadow:var(--shadow);
+    animation:cardIn .4s ease both;
+  }
+  .motiv-banner.ok{background:linear-gradient(100deg, var(--green-soft), var(--surface)); border-color:var(--green);}
+  .motiv-banner.warn{background:linear-gradient(100deg, var(--brick-soft), var(--surface)); border-color:var(--brick);}
+  .motiv-icon{font-size:26px; flex-shrink:0; animation:iconWiggle 2.2s ease-in-out infinite;}
+  @keyframes iconWiggle{0%,100%{transform:rotate(0deg);} 25%{transform:rotate(-8deg);} 75%{transform:rotate(8deg);}}
+  .motiv-text{font-weight:700; font-size:14.5px; color:var(--ink);}
+  .motiv-sub{font-size:12px; color:var(--muted); margin-top:2px; font-weight:400;}
 
   .panel{
     background:var(--surface); border:1px solid var(--line); border-radius:var(--radius);
     box-shadow:var(--shadow); overflow:hidden; margin-bottom:20px;
+    animation:cardIn .35s ease both;
   }
   .panel-head{
     display:flex; justify-content:space-between; align-items:center;
@@ -114,6 +145,7 @@
     background:var(--ink); color:#fff; transition:.15s;
   }
   .btn:hover{opacity:.88;}
+  .btn:active{transform:scale(.95);}
   .btn.brass{background:var(--brass);}
   .btn.ghost{background:transparent; color:var(--ink); border:1.5px solid var(--line);}
   .btn.danger{background:var(--brick);}
@@ -252,11 +284,21 @@
   .empty-state .big{font-size:34px; margin-bottom:10px;}
 
   .toast{
-    position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
-    background:var(--ink); color:#fff; padding:10px 20px; border-radius:8px;
-    font-size:13px; opacity:0; pointer-events:none; transition:.25s; z-index:100;
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) scale(.9);
+    background:var(--ink); color:#fff; padding:11px 22px; border-radius:9px;
+    font-size:13.5px; font-weight:700; opacity:0; pointer-events:none; transition:.28s cubic-bezier(.2,.9,.3,1.3); z-index:100;
+    box-shadow:0 6px 18px rgba(30,42,56,0.25);
   }
-  .toast.show{opacity:1; transform:translateX(-50%) translateY(-6px);}
+  .toast.show{opacity:1; transform:translateX(-50%) translateY(-6px) scale(1);}
+
+  .confetti-piece{
+    position:fixed; top:-20px; font-size:20px; z-index:200; pointer-events:none;
+    animation:confettiFall 1.3s ease-in forwards;
+  }
+  @keyframes confettiFall{
+    0%{transform:translateY(0) rotate(0deg); opacity:1;}
+    100%{transform:translateY(90vh) rotate(340deg); opacity:0;}
+  }
 
   .type-badge{font-size:11px; font-weight:700; padding:3px 9px; border-radius:5px;}
   .type-badge.sale{background:var(--green-soft); color:var(--green);}
@@ -536,6 +578,7 @@ async function loadState(){
       state.finance.expenses = state.finance.expenses || [];
       state.finance.incomeSources = state.finance.incomeSources || DEFAULT_INCOME_SOURCES.slice();
       state.finance.expenseCategories = state.finance.expenseCategories || DEFAULT_EXPENSE_CATEGORIES.slice();
+      state.finance.currencies = state.finance.currencies || DEFAULT_CURRENCIES.map(c=>({...c}));
       render();
     }
   }catch(e){}
@@ -561,6 +604,7 @@ async function loadState(){
       state.finance.expenses = state.finance.expenses || [];
       state.finance.incomeSources = state.finance.incomeSources || DEFAULT_INCOME_SOURCES.slice();
       state.finance.expenseCategories = state.finance.expenseCategories || DEFAULT_EXPENSE_CATEGORIES.slice();
+      state.finance.currencies = state.finance.currencies || DEFAULT_CURRENCIES.map(c=>({...c}));
     }
     try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
     setSyncStatus('متصل', 'ok');
@@ -611,6 +655,40 @@ function showToast(msg){
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'), 2200);
+}
+
+/* ---------- Delight: confetti + motivation ---------- */
+const CONFETTI_EMOJI = ['💰','🎉','✨','💵','🟢','⭐'];
+function celebrate(){
+  for(let i=0;i<14;i++){
+    const el = document.createElement('div');
+    el.className = 'confetti-piece';
+    el.textContent = CONFETTI_EMOJI[Math.floor(Math.random()*CONFETTI_EMOJI.length)];
+    el.style.left = (Math.random()*94 + 3) + 'vw';
+    el.style.animationDelay = (Math.random()*.25) + 's';
+    el.style.animationDuration = (1.0 + Math.random()*.6) + 's';
+    el.style.fontSize = (16 + Math.random()*14) + 'px';
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(), 2000);
+  }
+}
+
+// Returns { icon, mood, text, sub } for a motivational banner based on a net figure.
+function motivationLine(net, periodLabel){
+  if(net > 0){
+    return { mood:'ok', icon:'📈', text:`أحسنت! صافي ${periodLabel} حتى الآن ${fmtMoney(net)}$ بالربح`, sub:'استمر على هذا المستوى 🚀' };
+  }
+  if(net < 0){
+    return { mood:'warn', icon:'⚠️', text:`مصروفات ${periodLabel} أعلى من دخلك بمقدار ${fmtMoney(Math.abs(net))}$`, sub:'راجع أكبر بند مصروف وشوف وين تقدر توفّر' };
+  }
+  return { mood:'', icon:'👋', text:'ابدأ بتسجيل أول عملية دخل أو مصروف', sub:'كل رقم تسجّله يقرّبك من صورة أوضح لأموالك' };
+}
+function motivBannerHtml(net, periodLabel){
+  const m = motivationLine(net, periodLabel);
+  return `<div class="motiv-banner ${m.mood}">
+    <div class="motiv-icon">${m.icon}</div>
+    <div><div class="motiv-text">${m.text}</div><div class="motiv-sub">${m.sub}</div></div>
+  </div>`;
 }
 
 /* ---------- Nav ---------- */
@@ -758,14 +836,17 @@ function renderDashboard(){
   `).join('');
   if(!lowRows) lowRows = `<tr class="empty-row"><td colspan="3">لا يوجد نقص في المخزون</td></tr>`;
 
+  const monthNet = financeSum('income', x=>isSameMonth(x.date, todayStr())) - financeSum('expense', x=>isSameMonth(x.date, todayStr()));
+
   return `
+  ${motivBannerHtml(monthNet, 'هذا الشهر')}
   <div class="stat-grid">
-    <div class="stat-card"><div class="stat-label">عدد المنتجات</div><div class="stat-value">${state.products.length}</div></div>
-    <div class="stat-card"><div class="stat-label">منتجات منخفضة المخزون</div><div class="stat-value ${lowStock.length?'warn':'ok'}">${lowStock.length}</div></div>
-    <div class="stat-card"><div class="stat-label">العملاء</div><div class="stat-value">${state.customers.length}</div></div>
-    <div class="stat-card"><div class="stat-label">الموردين</div><div class="stat-value">${state.suppliers.length}</div></div>
-    <div class="stat-card"><div class="stat-label">طلبات معلّقة</div><div class="stat-value ${pending?'warn':'ok'}">${pending}</div></div>
-    <div class="stat-card"><div class="stat-label">إجمالي المبيعات</div><div class="stat-value ok mono">${fmtMoney(revenue)}</div></div>
+    <div class="stat-card"><div class="stat-label">📦 عدد المنتجات</div><div class="stat-value">${state.products.length}</div></div>
+    <div class="stat-card"><div class="stat-label">⚠️ منتجات منخفضة المخزون</div><div class="stat-value ${lowStock.length?'warn':'ok'}">${lowStock.length}</div></div>
+    <div class="stat-card"><div class="stat-label">☺ العملاء</div><div class="stat-value">${state.customers.length}</div></div>
+    <div class="stat-card"><div class="stat-label">⚓ الموردين</div><div class="stat-value">${state.suppliers.length}</div></div>
+    <div class="stat-card"><div class="stat-label">⏳ طلبات معلّقة</div><div class="stat-value ${pending?'warn':'ok'}">${pending}</div></div>
+    <div class="stat-card"><div class="stat-label">💵 إجمالي المبيعات</div><div class="stat-value ok mono">${fmtMoney(revenue)}</div></div>
   </div>
 
   <div class="panel">
@@ -1183,7 +1264,7 @@ function importModal(existing){
       if(newImp.status==='received'){ receiveImport(newImp); }
     }
     saveState(); closeModal(); render();
-    showToast('تم حفظ الشحنة');
+    showToast('🚢 تم حفظ الشحنة');
   };
 }
 function renderImportItemLines(){
@@ -1366,7 +1447,7 @@ function addToCart(productId, color, size){
   }else{
     cart.push({productId, qty:1, color:color||'', size:size||''});
   }
-  showToast('أُضيف إلى الطلب');
+  showToast('🛒 أُضيف إلى الطلب');
   renderCartFab();
 }
 function renderCartFab(){
@@ -1504,7 +1585,7 @@ function renderCartModalBody(){
     state.orders.push(order);
     cart = [];
     saveState(); closeModal(); render();
-    showToast('تم إرسال الطلب بنجاح');
+    showToast('🎉 تم إرسال الطلب بنجاح');
   };
 }
 
@@ -1621,6 +1702,7 @@ document.getElementById('overlay').addEventListener('click', (e)=>{
 
 /* ---------- Finance ---------- */
 const DEFAULT_INCOME_SOURCES = ['DoorDash','Amazon Flex','Uber','راتب','مشروع','بيع منتجات','عمل حر','دخل آخر'];
+const DEFAULT_CURRENCIES = [{id:'USD', name:'دولار أمريكي', rate:1}];
 const DEFAULT_EXPENSE_CATEGORIES = ['الوقود','الطعام','السيارة','الصيانة','التأمين','الهاتف','الإنترنت','الإيجار','المشتريات','أدوات العمل','رسوم وتكاليف','مصروف شخصي','مصروف آخر'];
 
 function financeArr(kind){ return kind==='income' ? state.finance.incomes : state.finance.expenses; }
@@ -1640,7 +1722,29 @@ function isSameMonth(dateStr, ref){
 }
 
 function financeSum(kind, filterFn){
-  return financeArr(kind).filter(filterFn||(()=>true)).reduce((s,x)=>s+Number(x.amount||0),0);
+  return financeArr(kind).filter(filterFn||(()=>true)).reduce((s,x)=>s+txnUSD(x),0);
+}
+
+/* -- Currency helpers -- */
+function currencyById(id){
+  return (state.finance.currencies||[]).find(c=>c.id===id) || {id:'USD', name:'دولار أمريكي', rate:1};
+}
+function currencyName(id){
+  if(!id || id==='USD') return 'دولار أمريكي';
+  const c = (state.finance.currencies||[]).find(x=>x.id===id);
+  return c ? c.name : 'عملة محذوفة';
+}
+function toUSD(amount, currencyId){
+  if(!currencyId || currencyId==='USD') return Number(amount)||0;
+  const c = currencyById(currencyId);
+  const rate = Number(c.rate)||1;
+  return rate ? (Number(amount)||0) / rate : 0;
+}
+// Uses the USD value frozen at entry time (amountUSD) so later rate edits
+// don't silently rewrite past bookkeeping. Falls back to raw amount for
+// older records saved before currencies existed (those were always USD).
+function txnUSD(x){
+  return x.amountUSD != null ? Number(x.amountUSD) : (Number(x.amount)||0);
 }
 
 function renderFinance(){
@@ -1657,18 +1761,31 @@ function renderFinance(){
   const monthExpense = financeSum('expense', x=>isSameMonth(x.date, today));
   const monthNet = monthIncome - monthExpense;
 
-  // Per-source profit breakdown
+  let currencyRows = (state.finance.currencies||[]).map(c=>{
+    const isUSD = c.id==='USD';
+    return `<tr>
+      <td>${c.name}</td>
+      <td class="mono">${isUSD ? '1.00 (أساسي)' : fmtMoney(c.rate)}</td>
+      <td>
+        <div class="row-actions">
+          ${isUSD ? '' : `<button class="btn ghost small" data-edit-currency="${c.id}">تعديل</button><button class="btn danger small" data-del-currency="${c.id}">حذف</button>`}
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Per-source profit breakdown (all converted to USD so mixed currencies add up correctly)
   const sourceMap = {};
   state.finance.incomes.forEach(x=>{
     const k = x.source || 'دخل آخر';
     sourceMap[k] = sourceMap[k] || {income:0, expense:0};
-    sourceMap[k].income += Number(x.amount||0);
+    sourceMap[k].income += txnUSD(x);
   });
   state.finance.expenses.forEach(x=>{
     if(!x.linkedSource) return;
     const k = x.linkedSource;
     sourceMap[k] = sourceMap[k] || {income:0, expense:0};
-    sourceMap[k].expense += Number(x.amount||0);
+    sourceMap[k].expense += txnUSD(x);
   });
   let sourceRows = Object.keys(sourceMap).map(k=>{
     const v = sourceMap[k];
@@ -1690,10 +1807,14 @@ function renderFinance(){
 
   let rows = txns.map(t=>{
     const label = t.kind==='income' ? (t.source||'—') : (t.category||'—');
+    const isUSD = !t.currencyId || t.currencyId==='USD';
+    const amountCell = isUSD
+      ? `${t.kind==='income'?'+':'-'}${fmtMoney(t.amount)}`
+      : `${t.kind==='income'?'+':'-'}${fmtMoney(t.amount)} <span style="font-size:11px; opacity:.65;">${currencyName(t.currencyId)}</span><br><span style="font-size:11px; opacity:.65; font-weight:400;">≈ ${fmtMoney(txnUSD(t))}$</span>`;
     return `<tr>
       <td><span class="type-badge ${t.kind}">${t.kind==='income'?'دخل':'مصروف'}</span></td>
       <td>${label}</td>
-      <td class="mono ${t.kind==='income'?'ok':'warn'}" style="font-weight:800;">${t.kind==='income'?'+':'-'}${fmtMoney(t.amount)}</td>
+      <td class="mono ${t.kind==='income'?'ok':'warn'}" style="font-weight:800;">${amountCell}</td>
       <td class="mono">${t.date}</td>
       <td>${t.notes||'—'}</td>
       <td>
@@ -1707,13 +1828,14 @@ function renderFinance(){
   if(!rows) rows = `<tr class="empty-row"><td colspan="6">لا توجد عمليات بعد — ابدأ بإضافة دخل أو مصروف</td></tr>`;
 
   return `
+  ${motivBannerHtml(net, 'إجمالاً')}
   <div class="stat-grid">
-    <div class="stat-card"><div class="stat-label">إجمالي الدخل</div><div class="stat-value ok mono">${fmtMoney(totalIncome)}</div></div>
-    <div class="stat-card"><div class="stat-label">إجمالي المصروفات</div><div class="stat-value warn mono">${fmtMoney(totalExpense)}</div></div>
-    <div class="stat-card"><div class="stat-label">${net>=0?'صافي الربح':'صافي الخسارة'}</div><div class="stat-value ${net>=0?'ok':'warn'} mono">${fmtMoney(net)}</div></div>
-    <div class="stat-card"><div class="stat-label">صافي اليوم</div><div class="stat-value ${todayNet>=0?'ok':'warn'} mono">${fmtMoney(todayNet)}</div></div>
-    <div class="stat-card"><div class="stat-label">صافي هذا الشهر</div><div class="stat-value ${monthNet>=0?'ok':'warn'} mono">${fmtMoney(monthNet)}</div></div>
-    <div class="stat-card"><div class="stat-label">عدد العمليات</div><div class="stat-value">${txns.length}</div></div>
+    <div class="stat-card"><div class="stat-label">💰 إجمالي الدخل</div><div class="stat-value ok mono">${fmtMoney(totalIncome)}</div></div>
+    <div class="stat-card"><div class="stat-label">💸 إجمالي المصروفات</div><div class="stat-value warn mono">${fmtMoney(totalExpense)}</div></div>
+    <div class="stat-card"><div class="stat-label">${net>=0?'📈 صافي الربح':'📉 صافي الخسارة'}</div><div class="stat-value ${net>=0?'ok':'warn'} mono">${fmtMoney(net)}</div></div>
+    <div class="stat-card"><div class="stat-label">☀️ صافي اليوم</div><div class="stat-value ${todayNet>=0?'ok':'warn'} mono">${fmtMoney(todayNet)}</div></div>
+    <div class="stat-card"><div class="stat-label">🗓️ صافي هذا الشهر</div><div class="stat-value ${monthNet>=0?'ok':'warn'} mono">${fmtMoney(monthNet)}</div></div>
+    <div class="stat-card"><div class="stat-label">🧾 عدد العمليات</div><div class="stat-value">${txns.length}</div></div>
   </div>
 
   <div class="panel">
@@ -1724,6 +1846,15 @@ function renderFinance(){
         <button class="btn danger" id="addExpenseBtn">+ إضافة مصروف</button>
       </div>
     </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">العملات وأسعار الصرف</div>
+      <button class="btn ghost small" id="addCurrencyBtn">+ إضافة عملة</button>
+    </div>
+    <table><thead><tr><th>العملة</th><th>1 دولار =</th><th></th></tr></thead>
+    <tbody>${currencyRows}</tbody></table>
   </div>
 
   <div class="panel">
@@ -1739,6 +1870,44 @@ function renderFinance(){
   </div>`;
 }
 
+function currencyModal(existing){
+  const c = existing || { name:'', rate:'' };
+  openModal(`
+    <div class="modal-head">
+      <div class="modal-title">${existing?'تعديل عملة':'إضافة عملة'}</div>
+      <div class="close-x" id="closeModal">×</div>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>اسم العملة</label><input id="f-curName" value="${c.name}" placeholder="مثال: ريال يمني"></div>
+      <div class="field">
+        <label>سعر الصرف — كم يساوي 1 دولار أمريكي؟</label>
+        <input id="f-curRate" type="number" value="${c.rate}" placeholder="مثال: 530">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn brass" id="saveCurrency">${existing?'حفظ التعديلات':'إضافة'}</button>
+      <button class="btn ghost" id="cancelModal">إلغاء</button>
+    </div>
+  `);
+  document.getElementById('closeModal').onclick = closeModal;
+  document.getElementById('cancelModal').onclick = closeModal;
+
+  document.getElementById('saveCurrency').onclick = ()=>{
+    const name = document.getElementById('f-curName').value.trim();
+    const rate = Number(document.getElementById('f-curRate').value);
+    if(!name){ showToast('الرجاء إدخال اسم العملة'); return; }
+    if(!rate || rate<=0){ showToast('الرجاء إدخال سعر صرف صحيح'); return; }
+    if(existing){
+      existing.name = name;
+      existing.rate = rate;
+    } else {
+      state.finance.currencies.push({ id: uid('cur'), name, rate });
+    }
+    saveState(); render(); closeModal();
+    showToast(existing ? 'تم حفظ التعديلات' : 'تمت إضافة العملة');
+  };
+}
+
 function financePicker(kind, selected){
   const list = state.finance[financeListKey(kind)] || [];
   return list.map(name=>`<button type="button" class="btn ${name===selected?'brass':'ghost'} small finance-opt" data-val="${name}" style="margin:3px;">${name}</button>`).join('');
@@ -1746,9 +1915,10 @@ function financePicker(kind, selected){
 
 function financeModal(kind, existing){
   const isIncome = kind==='income';
-  const x = existing || { amount:'', date: todayStr(), notes:'', linkedSource:'' };
+  const x = existing || { amount:'', date: todayStr(), notes:'', linkedSource:'', currencyId:'USD' };
   const labelField = financeLabelField(kind);
   const selectedVal = existing ? existing[labelField] : (state.finance[financeListKey(kind)][0]||'');
+  const curId = x.currencyId || 'USD';
 
   const linkedSourceField = isIncome ? '' : `
     <div class="field">
@@ -1765,7 +1935,16 @@ function financeModal(kind, existing){
       <div class="close-x" id="closeModal">×</div>
     </div>
     <div class="modal-body">
-      <div class="field"><label>المبلغ</label><input id="f-amount" type="number" value="${x.amount}" placeholder="0.00"></div>
+      <div class="field-row">
+        <div class="field"><label>المبلغ</label><input id="f-amount" type="number" value="${x.amount}" placeholder="0.00"></div>
+        <div class="field">
+          <label>العملة</label>
+          <select id="f-currency">
+            ${state.finance.currencies.map(c=>`<option value="${c.id}" ${curId===c.id?'selected':''}>${c.name}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="picked-line" id="usdPreview" style="margin-top:-8px; margin-bottom:14px;"></div>
       <div class="field">
         <label>${isIncome?'مصدر الدخل':'نوع المصروف'} — اضغط للاختيار</label>
         <div id="financePickerBox">${financePicker(kind, selectedVal)}</div>
@@ -1786,6 +1965,17 @@ function financeModal(kind, existing){
   `);
   document.getElementById('closeModal').onclick = closeModal;
   document.getElementById('cancelModal').onclick = closeModal;
+
+  function updateUsdPreview(){
+    const amt = Number(document.getElementById('f-amount').value)||0;
+    const cid = document.getElementById('f-currency').value;
+    const box = document.getElementById('usdPreview');
+    if(cid==='USD' || !amt){ box.textContent = ''; return; }
+    box.textContent = '≈ ' + fmtMoney(toUSD(amt, cid)) + ' دولار (حسب آخر سعر صرف مسجّل)';
+  }
+  document.getElementById('f-amount').addEventListener('input', updateUsdPreview);
+  document.getElementById('f-currency').addEventListener('change', updateUsdPreview);
+  updateUsdPreview();
 
   function bindPickerClicks(){
     document.querySelectorAll('.finance-opt').forEach(b=>{
@@ -1815,6 +2005,8 @@ function financeModal(kind, existing){
   document.getElementById('saveFinance').onclick = ()=>{
     const amount = Number(document.getElementById('f-amount').value);
     if(!amount || amount<=0){ showToast('الرجاء إدخال مبلغ صحيح'); return; }
+    const currencyId = document.getElementById('f-currency').value || 'USD';
+    const amountUSD = toUSD(amount, currencyId);
     const source = document.getElementById('f-source').value || (isIncome?'دخل آخر':'مصروف آخر');
     const date = document.getElementById('f-date').value || todayStr();
     const notes = document.getElementById('f-notes').value.trim();
@@ -1822,18 +2014,21 @@ function financeModal(kind, existing){
 
     if(existing){
       existing.amount = amount;
+      existing.currencyId = currencyId;
+      existing.amountUSD = amountUSD;
       existing[labelField] = source;
       existing.date = date;
       existing.notes = notes;
       if(!isIncome) existing.linkedSource = linkedSource;
     } else {
-      const rec = { id: uid(kind), amount, date, notes, createdAt: Date.now() };
+      const rec = { id: uid(kind), amount, currencyId, amountUSD, date, notes, createdAt: Date.now() };
       rec[labelField] = source;
       if(!isIncome) rec.linkedSource = linkedSource;
       financeArr(kind).push(rec);
     }
     saveState(); render(); closeModal();
-    showToast(existing ? 'تم حفظ التعديلات' : (isIncome?'تم إضافة الدخل':'تم إضافة المصروف'));
+    if(!existing && isIncome) celebrate();
+    showToast(existing ? '✅ تم حفظ التعديلات' : (isIncome?'💰 تم إضافة الدخل':'📝 تم إضافة المصروف'));
   };
 }
 
@@ -2080,7 +2275,7 @@ function productModal(existing){
       state.products.push(Object.assign({id:uid('p')}, data));
     }
     saveState(); closeModal(); render();
-    showToast('تم الحفظ');
+    showToast('✅ تم الحفظ');
   };
 }
 
@@ -2120,7 +2315,7 @@ function partyModal(kind, existing){
     if(existing){ Object.assign(existing, data); }
     else{ state[kind].push(Object.assign({id:uid(isCust?'c':'s')}, data)); }
     saveState(); closeModal(); render();
-    showToast('تم الحفظ');
+    showToast('✅ تم الحفظ');
   };
 }
 
@@ -2200,7 +2395,7 @@ function orderModal(type){
     });
     state.orders.push(order);
     saveState(); closeModal(); render();
-    showToast('تم حفظ الطلب');
+    showToast('✅ تم حفظ الطلب');
   };
 }
 
@@ -2322,19 +2517,39 @@ function orderViewModal(o){
     o.paid = paidBox.checked;
     o.status = paidBox.checked ? 'paid' : 'pending';
     saveState();
-    showToast(paidBox.checked ? 'تم تعليم الطلب كمدفوع' : 'تم إلغاء علامة الدفع');
+    if(paidBox.checked) celebrate();
+    showToast(paidBox.checked ? '🎉 تم تعليم الطلب كمدفوع' : 'تم إلغاء علامة الدفع');
   };
 
   const saveStageBtn = document.getElementById('saveStage');
   if(saveStageBtn) saveStageBtn.onclick = ()=>{
     o.stage = document.getElementById('f-stage').value;
     saveState(); render(); closeModal();
-    showToast('تم تحديث مرحلة الطلب');
+    showToast('🚚 تم تحديث مرحلة الطلب');
   };
 }
 
 /* ---------- Event binding per view ---------- */
 function bindViewEvents(){
+  const addCurrencyBtn = document.getElementById('addCurrencyBtn');
+  if(addCurrencyBtn) addCurrencyBtn.onclick = ()=>currencyModal(null);
+  document.querySelectorAll('[data-edit-currency]').forEach(b=>{
+    b.onclick = ()=>{
+      const cur = state.finance.currencies.find(c=>c.id===b.dataset.editCurrency);
+      currencyModal(cur);
+    };
+  });
+  document.querySelectorAll('[data-del-currency]').forEach(b=>{
+    b.onclick = ()=>{
+      const id = b.dataset.delCurrency;
+      const inUse = state.finance.incomes.some(x=>x.currencyId===id) || state.finance.expenses.some(x=>x.currencyId===id);
+      if(inUse && !confirm('هذه العملة مستخدمة في عمليات سابقة. حذفها لن يغيّر أرقامها لكن اسمها سيظهر "عملة محذوفة". متابعة؟')) return;
+      if(!inUse && !confirm('حذف هذه العملة؟')) return;
+      state.finance.currencies = state.finance.currencies.filter(c=>c.id!==id);
+      saveState(); render(); showToast('🗑️ تم الحذف');
+    };
+  });
+
   const addIncomeBtn = document.getElementById('addIncomeBtn');
   if(addIncomeBtn) addIncomeBtn.onclick = ()=>financeModal('income', null);
   const addExpenseBtn = document.getElementById('addExpenseBtn');
@@ -2353,7 +2568,7 @@ function bindViewEvents(){
       const [kind,id] = b.dataset.delFinance.split(':');
       if(kind==='income') state.finance.incomes = state.finance.incomes.filter(x=>x.id!==id);
       else state.finance.expenses = state.finance.expenses.filter(x=>x.id!==id);
-      saveState(); render(); showToast('تم الحذف');
+      saveState(); render(); showToast('🗑️ تم الحذف');
     };
   });
 
@@ -2370,7 +2585,7 @@ function bindViewEvents(){
     b.onclick = ()=>{
       if(!confirm('حذف هذا المنتج؟')) return;
       state.products = state.products.filter(p=>p.id!==b.dataset.delProduct);
-      saveState(); render(); showToast('تم الحذف');
+      saveState(); render(); showToast('🗑️ تم الحذف');
     };
   });
 
@@ -2389,7 +2604,7 @@ function bindViewEvents(){
       const [kind,id] = b.dataset.delParty.split(':');
       if(!confirm('حذف هذا السجل؟')) return;
       state[kind] = state[kind].filter(p=>p.id!==id);
-      saveState(); render(); showToast('تم الحذف');
+      saveState(); render(); showToast('🗑️ تم الحذف');
     };
   });
 
@@ -2415,7 +2630,7 @@ function bindViewEvents(){
         });
       }
       state.orders = state.orders.filter(x=>x.id!==b.dataset.delOrder);
-      saveState(); render(); showToast('تم الحذف');
+      saveState(); render(); showToast('🗑️ تم الحذف');
     };
   });
 
@@ -2431,14 +2646,14 @@ function bindViewEvents(){
   document.querySelectorAll('[data-receive-import]').forEach(b=>{
     b.onclick = ()=>{
       const imp = state.imports.find(x=>x.id===b.dataset.receiveImport);
-      if(imp){ receiveImport(imp); saveState(); render(); showToast('تم استلام الشحنة وتحديث المخزون'); }
+      if(imp){ receiveImport(imp); saveState(); render(); showToast('📦 تم استلام الشحنة وتحديث المخزون'); }
     };
   });
   document.querySelectorAll('[data-del-import]').forEach(b=>{
     b.onclick = ()=>{
       if(!confirm('حذف هذه الشحنة؟ (لن يتم عكس المخزون تلقائياً إذا كانت مستلمة)')) return;
       state.imports = state.imports.filter(x=>x.id!==b.dataset.delImport);
-      saveState(); render(); showToast('تم الحذف');
+      saveState(); render(); showToast('🗑️ تم الحذف');
     };
   });
 
@@ -2466,7 +2681,7 @@ function bindViewEvents(){
       note: g('s-note').trim(),
     };
     saveState();
-    showToast('تم حفظ إعدادات الدفع');
+    showToast('✅ تم حفظ إعدادات الدفع');
   };
 
   document.querySelectorAll('.stage-quick').forEach(sel=>{
@@ -2475,7 +2690,7 @@ function bindViewEvents(){
       if(!o) return;
       o.stage = e.target.value;
       saveState();
-      showToast('تم تحديث المرحلة');
+      showToast('🚚 تم تحديث المرحلة');
     };
   });
 
