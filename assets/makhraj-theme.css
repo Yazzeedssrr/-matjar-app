@@ -1,0 +1,48 @@
+:root {
+  --makhraj-bg: #070a0d;
+  --makhraj-surface: #10151b;
+  --makhraj-surface-2: #171e26;
+  --makhraj-text: #f7f4ed;
+  --makhraj-muted: #aab3bd;
+  --makhraj-light: #f5d98b;
+  --makhraj-glow: rgba(245,217,139,.22);
+  --makhraj-radius: 22px;
+}
+
+body {
+  background: radial-gradient(circle at 50% -10%, #26303a 0, var(--makhraj-bg) 34%, #030405 100%) !important;
+  color: var(--makhraj-text);
+}
+
+.makhraj-brand {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  padding:14px 18px;
+  color:var(--makhraj-text);
+}
+.makhraj-mark {
+  width:42px;height:42px;border-radius:50%;
+  display:grid;place-items:center;
+  background:radial-gradient(circle, #fff7cf 0 10%, #e8c96e 12%, #202832 36%, #050607 70%);
+  box-shadow:0 0 28px var(--makhraj-glow);
+  font-weight:900;color:#111;
+}
+.makhraj-wordmark {font-weight:900;font-size:1.2rem;letter-spacing:.02em}
+.makhraj-tagline {font-size:.72rem;color:var(--makhraj-muted);margin-top:2px}
+
+.makhraj-card {
+  background:linear-gradient(145deg, rgba(24,31,39,.96), rgba(10,13,17,.96));
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:var(--makhraj-radius);
+  box-shadow:0 16px 50px rgba(0,0,0,.25);
+}
+
+button,.btn {border-radius:16px}
+input,select,textarea {border-radius:14px}
+
+@media (prefers-reduced-motion:no-preference) {
+  .makhraj-mark {animation:makhrajGlow 3.6s ease-in-out infinite}
+  @keyframes makhrajGlow {50%{box-shadow:0 0 42px rgba(245,217,139,.38)}}
+}

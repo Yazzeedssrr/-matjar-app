@@ -1,0 +1,14 @@
+{
+  "name": "مَخْرَج | MAKHRAJ",
+  "short_name": "مَخْرَج",
+  "description": "مَخْرَج — دائمًا هناك مخرج.",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./store.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#070A0D",
+  "theme_color": "#070A0D",
+  "categories": ["shopping", "lifestyle"]
+}
