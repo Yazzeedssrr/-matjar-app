@@ -259,9 +259,25 @@
   async function checkout(){
     if(!state.cart.length) return;
     if(!state.session){ openAuth('login','سجّل الدخول أولًا حتى نستطيع حفظ طلبك ومتابعته.'); return; }
+    const {data:addresses}=await sb.from('addresses').select('*').order('is_default',{ascending:false}).order('created_at',{ascending:false});
+    const list=addresses||[],def=list.find(a=>a.is_default)||list[0]||null;
     openSheet('<div class="sheethead"><h2 style="margin:0">بيانات التوصيل</h2><button class="close" data-close>×</button></div>'+
-      '<div class="formgrid"><input class="field" id="coName" placeholder="اسم المستلم" value="'+esc(state.profile?.full_name||'')+'"><input class="field" id="coPhone" inputmode="tel" placeholder="رقم الهاتف" value="'+esc(state.profile?.phone||'')+'"><input class="field" id="coLine1" placeholder="العنوان"><input class="field" id="coLine2" placeholder="شقة / تفاصيل إضافية (اختياري)"><div class="line"><input class="field" id="coCity" placeholder="المدينة"><input class="field" id="coState" placeholder="الولاية"></div><input class="field" id="coZip" placeholder="ZIP Code" inputmode="numeric"><input class="field" id="coCoupon" placeholder="كود خصم (اختياري)"><textarea class="field" id="coNotes" rows="3" placeholder="ملاحظات للطلب (اختياري)"></textarea><label class="tiny"><input type="checkbox" id="saveAddress" checked> حفظ العنوان في حسابي</label><button class="primary" id="placeOrderBtn">إنشاء الطلب</button><div id="checkoutMsg" class="tiny"></div></div>');
+      '<div class="formgrid">'+
+      (list.length?'<select class="field" id="coSaved"><option value="">استخدام عنوان جديد</option>'+list.map(a=>'<option value="'+a.id+'" '+(def?.id===a.id?'selected':'')+'>'+esc(a.label||'عنوان')+' — '+esc(a.line1)+'، '+esc(a.city)+'</option>').join('')+'</select>':'')+
+      '<input class="field" id="coName" placeholder="اسم المستلم"><input class="field" id="coPhone" inputmode="tel" placeholder="رقم الهاتف"><input class="field" id="coLine1" placeholder="العنوان"><input class="field" id="coLine2" placeholder="شقة / تفاصيل إضافية (اختياري)"><div class="line"><input class="field" id="coCity" placeholder="المدينة"><input class="field" id="coState" placeholder="الولاية"></div><input class="field" id="coZip" placeholder="ZIP Code" inputmode="numeric"><input class="field" id="coCoupon" placeholder="كود خصم (اختياري)"><textarea class="field" id="coNotes" rows="3" placeholder="ملاحظات للطلب (اختياري)"></textarea><label class="tiny"><input type="checkbox" id="saveAddress" '+(!def?'checked':'')+'> حفظ هذا العنوان في حسابي</label><button class="primary" id="placeOrderBtn">إنشاء الطلب</button><div id="checkoutMsg" class="tiny"></div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
+    const fill=a=>{
+      $('#coName',els.panel).value=a?.recipient_name||state.profile?.full_name||'';
+      $('#coPhone',els.panel).value=a?.phone||state.profile?.phone||'';
+      $('#coLine1',els.panel).value=a?.line1||'';
+      $('#coLine2',els.panel).value=a?.line2||'';
+      $('#coCity',els.panel).value=a?.city||'';
+      $('#coState',els.panel).value=a?.state||'';
+      $('#coZip',els.panel).value=a?.postal_code||'';
+    };
+    fill(def);
+    const saved=$('#coSaved',els.panel);
+    if(saved)saved.onchange=()=>{const a=list.find(x=>x.id===saved.value)||null;fill(a);$('#saveAddress',els.panel).checked=!a;};
     $('#placeOrderBtn',els.panel).onclick=placeOrder;
   }
 
@@ -277,9 +293,7 @@
     btn.disabled=true;btn.textContent='جارٍ التحقق وإنشاء الطلب…';msg.textContent='';
     try{
       await syncCartToServer();
-      if($('#saveAddress',els.panel).checked){
-        await sb.from('addresses').insert({user_id:state.session.user.id,...address,label:'عنواني'});
-      }
+      const savedSelect=$('#coSaved',els.panel);\n      if($('#saveAddress',els.panel).checked && (!savedSelect || !savedSelect.value)){\n        await sb.from('addresses').insert({user_id:state.session.user.id,...address,label:'عنواني',is_default:false});\n      }
       const {data:orderId,error}=await sb.rpc('place_order',{p_shipping_address:address,p_notes:$('#coNotes',els.panel).value.trim()||null,p_coupon_code:$('#coCoupon',els.panel).value.trim()||null});
       if(error) throw error;
       const {data:order,error:e2}=await sb.from('orders').select('id,order_number,total,status,payment_status,created_at').eq('id',orderId).single();
@@ -409,11 +423,24 @@
       els.accountContent.innerHTML='<div class="card account-card"><h3>حساب مَخْرَج</h3><p class="muted">احفظ طلباتك وعناوينك ومفضلاتك على حسابك.</p><button class="primary" id="accLogin">تسجيل الدخول</button> <button class="secondary" id="accSignup">إنشاء حساب</button></div>';
       $('#accLogin').onclick=()=>openAuth('login');$('#accSignup').onclick=()=>openAuth('signup');return;
     }
-    els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accAddresses">عناويني</button><button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div><div id="accountExtra"></div>';
+    els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accProfile">بياناتي</button><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accAddresses">عناويني</button><button class="secondary" id="accNotifications">الإشعارات</button><button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div><div id="accountExtra"></div>';
+    $('#accProfile').onclick=profileModal;
     $('#accOrders').onclick=()=>showView('orders');
     $('#accFavs').onclick=()=>renderFavArea();
     $('#accAddresses').onclick=()=>renderAddresses();
+    $('#accNotifications').onclick=()=>renderNotifications();
     $('#accLogout').onclick=async()=>{await sb.auth.signOut();state.session=null;state.profile=null;toast('تم تسجيل الخروج');renderAccount();};
+  }
+
+  function profileModal(){
+    openSheet('<div class="sheethead"><h2 style="margin:0">بياناتي</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="profileName" placeholder="الاسم الكامل" value="'+esc(state.profile?.full_name||'')+'"><input class="field" id="profilePhone" inputmode="tel" placeholder="رقم الهاتف" value="'+esc(state.profile?.phone||'')+'"><button class="primary" id="saveProfile">حفظ</button><div id="profileMsg" class="tiny"></div></div>');
+    $('[data-close]',els.panel).onclick=closeSheet;
+    $('#saveProfile',els.panel).onclick=async()=>{
+      const row={full_name:$('#profileName',els.panel).value.trim()||null,phone:$('#profilePhone',els.panel).value.trim()||null};
+      const {error}=await sb.from('profiles').update(row).eq('id',state.session.user.id);
+      if(error){$('#profileMsg',els.panel).textContent=error.message;$('#profileMsg',els.panel).className='danger';return}
+      await loadProfile();closeSheet();renderAccount();toast('تم حفظ بياناتك');
+    };
   }
 
   function renderFavArea(){
@@ -444,6 +471,17 @@
       closeSheet();renderAddresses();toast('تم حفظ العنوان');
     };
     const del=$('#deleteAddressBtn',els.panel);if(del)del.onclick=async()=>{const {error}=await sb.from('addresses').delete().eq('id',a.id);if(error){$('#addressMsg',els.panel).textContent=error.message;return}closeSheet();renderAddresses();};
+  }
+
+  async function renderNotifications(){
+    const area=$('#accountExtra'); if(!area)return;
+    area.innerHTML='<div class="section"><h2>الإشعارات</h2><span class="tiny">تحديثات طلباتك وإرجاعاتك</span></div><div class="loading">جارٍ التحميل…</div>';
+    const {data,error}=await sb.from('notifications').select('*').order('created_at',{ascending:false}).limit(50);
+    if(error){area.innerHTML='<div class="error">تعذر تحميل الإشعارات.</div>';return}
+    const rows=data||[];
+    area.innerHTML='<div class="section"><h2>الإشعارات</h2><button class="secondary" id="readAll">تعليم الكل كمقروء</button></div>'+
+      (rows.length?rows.map(n=>'<div class="summary" style="'+(!n.read_at?'border-color:#f2d27b55':'')+'"><div class="line"><b>'+esc(n.title)+'</b><span class="tiny">'+new Date(n.created_at).toLocaleString('ar-US')+'</span></div><div class="muted">'+esc(n.body||'')+'</div></div>').join(''):'<div class="empty">لا توجد إشعارات بعد.</div>');
+    const btn=$('#readAll',area);if(btn)btn.onclick=async()=>{await sb.from('notifications').update({read_at:new Date().toISOString()}).is('read_at',null);renderNotifications();};
   }
 
   function openSmart(){
