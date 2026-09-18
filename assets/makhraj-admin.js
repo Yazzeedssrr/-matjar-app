@@ -220,7 +220,7 @@
   }
 
   async function loadOrders(){
-    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,total,created_at,shipping_address,notes,order_items(product_name,variant_title,sku,quantity,unit_price,line_total)').order('created_at',{ascending:false}).limit(200);
+    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,payment_method,total,created_at,shipping_address,notes,shipping_carrier,tracking_number,shipped_at,delivered_at,order_items(product_name,variant_title,sku,quantity,unit_price,line_total)').order('created_at',{ascending:false}).limit(200);
     if(error)return;
     state.orders=data||[];renderOrders();
   }
@@ -234,10 +234,10 @@
   function orderModal(o){
     openModal('<div class="sectionhead"><div><h2>MK-'+String(o.order_number).padStart(6,'0')+'</h2><div class="tiny">'+new Date(o.created_at).toLocaleString('ar-US')+'</div></div><button class="btn" data-close>إغلاق</button></div>'+
       '<div class="cols2"><div class="card"><b>حالة الطلب</b><select class="field" id="oStatus"><option value="pending">مستلم</option><option value="confirmed">مؤكد</option><option value="processing">قيد التجهيز</option><option value="shipped">تم الشحن</option><option value="delivered">تم التسليم</option><option value="cancelled">ملغى</option><option value="refunded">مسترد</option></select></div><div class="card"><b>حالة الدفع</b><select class="field" id="oPayment"><option value="unpaid">غير مدفوع</option><option value="authorized">مصرح</option><option value="paid">مدفوع</option><option value="partially_refunded">استرداد جزئي</option><option value="refunded">مسترد</option><option value="failed">فشل</option></select></div></div>'+
-      '<div class="card" style="margin-top:10px"><b>التوصيل</b><div class="muted">'+esc(o.shipping_address?.recipient_name||'')+' · '+esc(o.shipping_address?.phone||'')+'<br>'+esc(o.shipping_address?.line1||'')+' '+esc(o.shipping_address?.line2||'')+'<br>'+esc(o.shipping_address?.city||'')+' '+esc(o.shipping_address?.state||'')+' '+esc(o.shipping_address?.postal_code||'')+'</div></div>'+
+      '<div class="card" style="margin-top:10px"><b>التوصيل</b><div class="muted">'+esc(o.shipping_address?.recipient_name||'')+' · '+esc(o.shipping_address?.phone||'')+'<br>'+esc(o.shipping_address?.line1||'')+' '+esc(o.shipping_address?.line2||'')+'<br>'+esc(o.shipping_address?.city||'')+' '+esc(o.shipping_address?.state||'')+' '+esc(o.shipping_address?.postal_code||'')+'</div><div class="cols2" style="margin-top:10px"><input class="field" id="oCarrier" placeholder="شركة الشحن" value="'+esc(o.shipping_carrier||'')+'"><input class="field" id="oTracking" placeholder="رقم التتبع" value="'+esc(o.tracking_number||'')+'"></div></div>'+
       '<div class="tablewrap" style="margin-top:10px"><table class="table"><thead><tr><th>المنتج</th><th>SKU</th><th>الكمية</th><th>الإجمالي</th></tr></thead><tbody>'+(o.order_items||[]).map(i=>'<tr><td>'+esc(i.product_name)+'<div class="tiny">'+esc(i.variant_title||'')+'</div></td><td>'+esc(i.sku||'')+'</td><td>'+i.quantity+'</td><td>'+money(i.line_total)+'</td></tr>').join('')+'</tbody></table></div><div class="row" style="margin-top:12px"><b>الإجمالي</b><b style="font-size:22px;color:var(--gold)">'+money(o.total)+'</b></div><button class="btn primary" id="saveOrder" style="margin-top:12px">حفظ الحالة</button><div id="oMsg" class="tiny"></div>');
     $('[data-close]',modalBox).onclick=closeModal;$('#oStatus',modalBox).value=o.status;$('#oPayment',modalBox).value=o.payment_status;
-    $('#saveOrder',modalBox).onclick=async()=>{const {error}=await sb.from('orders').update({status:$('#oStatus',modalBox).value,payment_status:$('#oPayment',modalBox).value}).eq('id',o.id);if(error){msg($('#oMsg',modalBox),error.message,'bad');return}closeModal();await Promise.all([loadOrders(),loadStats()])};
+    $('#saveOrder',modalBox).onclick=async()=>{const {error}=await sb.from('orders').update({status:$('#oStatus',modalBox).value,payment_status:$('#oPayment',modalBox).value,shipping_carrier:$('#oCarrier',modalBox).value.trim()||null,tracking_number:$('#oTracking',modalBox).value.trim()||null}).eq('id',o.id);if(error){msg($('#oMsg',modalBox),error.message,'bad');return}closeModal();await Promise.all([loadOrders(),loadStats()])};
   }
 
   async function loadInventory(){
