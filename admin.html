@@ -42,7 +42,7 @@
         <button data-tab="orders">الطلبات</button>
         <button data-tab="categories">الأقسام</button>
         <button data-tab="inventory">المخزون</button>
-        <button data-tab="coupons">الكوبونات</button>
+        <button data-tab="coupons">الكوبونات</button>\n        <button data-tab="returns">الإرجاع</button>\n        <button data-tab="settings">الإعدادات</button>
       </aside>
 
       <section class="panel">
@@ -69,6 +69,16 @@
         <div id="couponsTab" class="hidden">
           <div class="sectionhead"><div><h2>الكوبونات</h2><div class="tiny">أكواد الخصم وشروطها</div></div><button id="newCouponBtn" class="btn primary">+ كوبون</button></div>
           <div id="couponsTable" class="tablewrap"></div>
+        </div>
+
+        <div id="returnsTab" class="hidden">
+          <div class="sectionhead"><div><h2>الإرجاع والاستبدال</h2><div class="tiny">طلبات العملاء بعد التسليم</div></div><button id="refreshReturnsBtn" class="btn">تحديث</button></div>
+          <div id="returnsTable" class="tablewrap"></div>
+        </div>
+
+        <div id="settingsTab" class="hidden">
+          <div class="sectionhead"><div><h2>إعدادات المتجر</h2><div class="tiny">الشحن والدعم والإعدادات العامة</div></div></div>
+          <div id="settingsContent"></div>
         </div>
       </section>
     </div>
