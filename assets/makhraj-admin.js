@@ -6,7 +6,7 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:cfg.currency}).format(Number(n||0));
   const slugify=s=>String(s||'').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'');
-  const state={session:null,profile:null,products:[],categories:[],orders:[],coupons:[],inventory:[],returns:[],settings:null};
+  const state={session:null,profile:null,products:[],categories:[],orders:[],coupons:[],inventory:[],returns:[],reviews:[],support:[],settings:null};
   const gate=$('#authGate'), app=$('#adminApp'), modal=$('#modal'), modalBox=$('#modalBox');
 
   function msg(el,text,type=''){el.textContent=text;el.className='tiny '+type}
@@ -31,6 +31,8 @@
     $('#newCouponBtn').onclick=()=>couponModal();
     $('#refreshOrdersBtn').onclick=loadOrders;
     $('#refreshReturnsBtn').onclick=loadReturns;
+    $('#refreshReviewsBtn').onclick=loadReviewsAdmin;
+    $('#refreshSupportBtn').onclick=loadSupport;
     $$('.side button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
   }
   function showGate(){
@@ -67,11 +69,11 @@
   }
 
   async function refreshAll(){
-    await Promise.all([loadCategories(),loadProducts(),loadOrders(),loadInventory(),loadCoupons(),loadReturns(),loadSettings()]);
+    await Promise.all([loadCategories(),loadProducts(),loadOrders(),loadInventory(),loadCoupons(),loadReturns(),loadReviewsAdmin(),loadSupport(),loadSettings()]);
     await loadStats();
   }
   function showTab(tab){
-    ['products','orders','categories','inventory','coupons','returns','settings'].forEach(t=>$('#'+t+'Tab').classList.toggle('hidden',t!==tab));
+    ['products','orders','categories','inventory','coupons','returns','reviews','support','settings'].forEach(t=>$('#'+t+'Tab').classList.toggle('hidden',t!==tab));
     $$('.side button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   }
 
@@ -284,6 +286,55 @@
       closeModal();await loadReturns();
     };
   }
+
+  async function loadReviewsAdmin(){
+    const {data,error}=await sb.from('reviews').select('id,user_id,product_id,rating,title,body,is_approved,created_at,products(name)').order('created_at',{ascending:false}).limit(200);
+    if(error)return;state.reviews=data||[];renderReviewsAdmin();
+  }
+  function renderReviewsAdmin(){
+    const el=$('#reviewsTable'); if(!el)return;
+    if(!state.reviews.length){el.innerHTML='<div class="empty">لا توجد تقييمات بعد.</div>';return}
+    el.innerHTML='<table class="table"><thead><tr><th>المنتج</th><th>التقييم</th><th>المحتوى</th><th>الحالة</th><th></th></tr></thead><tbody>'+
+      state.reviews.map(r=>'<tr><td>'+esc(r.products?.name||'')+'</td><td>'+('★'.repeat(r.rating))+'</td><td><b>'+esc(r.title||'')+'</b><div class="tiny">'+esc(r.body||'')+'</div></td><td><span class="status">'+(r.is_approved?'منشور':'بانتظار المراجعة')+'</span></td><td><button class="btn" data-review="'+r.id+'">'+(r.is_approved?'إخفاء':'اعتماد')+'</button></td></tr>').join('')+'</tbody></table>';
+    $$('[data-review]',el).forEach(b=>b.onclick=async()=>{
+      const r=state.reviews.find(x=>x.id===b.dataset.review);
+      const {error}=await sb.from('reviews').update({is_approved:!r.is_approved}).eq('id',r.id);
+      if(error){alert(error.message);return}await loadReviewsAdmin();
+    });
+  }
+
+  async function loadSupport(){
+    const {data,error}=await sb.from('support_tickets').select('id,user_id,order_id,subject,status,priority,created_at,updated_at,orders(order_number)').order('updated_at',{ascending:false}).limit(200);
+    if(error)return;state.support=data||[];renderSupport();
+  }
+  function renderSupport(){
+    const el=$('#supportTable'); if(!el)return;
+    if(!state.support.length){el.innerHTML='<div class="empty">لا توجد تذاكر دعم.</div>';return}
+    el.innerHTML='<table class="table"><thead><tr><th>العنوان</th><th>الطلب</th><th>الحالة</th><th>الأولوية</th><th>آخر تحديث</th><th></th></tr></thead><tbody>'+
+      state.support.map(t=>'<tr><td><b>'+esc(t.subject)+'</b></td><td>'+(t.orders?.order_number?'MK-'+String(t.orders.order_number).padStart(6,'0'):'—')+'</td><td><span class="status">'+supportStatusAdmin(t.status)+'</span></td><td>'+esc(t.priority)+'</td><td>'+new Date(t.updated_at).toLocaleString('ar-US')+'</td><td><button class="btn" data-support="'+t.id+'">فتح</button></td></tr>').join('')+'</tbody></table>';
+    $$('[data-support]',el).forEach(b=>b.onclick=()=>supportModal(state.support.find(t=>t.id===b.dataset.support)));
+  }
+  async function supportModal(t){
+    const {data:messages,error}=await sb.from('support_messages').select('id,sender_user_id,message,is_staff,created_at').eq('ticket_id',t.id).order('created_at');
+    if(error){alert(error.message);return}
+    openModal('<div class="sectionhead"><div><h2>'+esc(t.subject)+'</h2><div class="tiny">'+supportStatusAdmin(t.status)+'</div></div><button class="btn" data-close>إغلاق</button></div>'+
+      '<div>'+((messages||[]).map(m=>'<div class="card" style="margin:8px 0"><div class="tiny">'+(m.is_staff?'دعم مَخْرَج':'العميل')+' · '+new Date(m.created_at).toLocaleString('ar-US')+'</div><div>'+esc(m.message)+'</div></div>').join('')||'<div class="empty">لا توجد رسائل.</div>')+'</div>'+
+      '<div class="form" style="margin-top:12px"><select class="field" id="supportStatus"><option value="open">مفتوحة</option><option value="in_progress">قيد المعالجة</option><option value="waiting_customer">بانتظار العميل</option><option value="resolved">تم الحل</option><option value="closed">مغلقة</option></select><select class="field" id="supportPriority"><option value="low">منخفضة</option><option value="normal">عادية</option><option value="high">عالية</option><option value="urgent">عاجلة</option></select><textarea class="field" id="supportReply" rows="4" placeholder="رد على العميل"></textarea><div class="toolbar"><button class="btn primary" id="sendSupportReply">إرسال الرد</button><button class="btn" id="saveSupportStatus">حفظ الحالة</button></div><div id="supportMsg" class="tiny"></div></div>');
+    $('[data-close]',modalBox).onclick=closeModal;$('#supportStatus',modalBox).value=t.status;$('#supportPriority',modalBox).value=t.priority;
+    $('#saveSupportStatus',modalBox).onclick=async()=>{
+      const {error}=await sb.from('support_tickets').update({status:$('#supportStatus',modalBox).value,priority:$('#supportPriority',modalBox).value}).eq('id',t.id);
+      if(error){msg($('#supportMsg',modalBox),error.message,'bad');return}
+      msg($('#supportMsg',modalBox),'تم حفظ الحالة.','ok');await loadSupport();
+    };
+    $('#sendSupportReply',modalBox).onclick=async()=>{
+      const text=$('#supportReply',modalBox).value.trim(),m=$('#supportMsg',modalBox);if(!text){msg(m,'اكتب الرد أولًا.','bad');return}
+      const {error}=await sb.from('support_messages').insert({ticket_id:t.id,sender_user_id:state.session.user.id,message:text,is_staff:true});
+      if(error){msg(m,error.message,'bad');return}
+      await sb.from('support_tickets').update({status:'waiting_customer'}).eq('id',t.id);
+      const fresh={...t,status:'waiting_customer'};await loadSupport();supportModal(fresh);
+    };
+  }
+  function supportStatusAdmin(s){return({open:'مفتوحة',waiting_customer:'بانتظار العميل',in_progress:'قيد المعالجة',resolved:'تم الحل',closed:'مغلقة'})[s]||s}
 
   async function loadSettings(){
     const {data,error}=await sb.from('store_settings').select('*').eq('id',1).single();
