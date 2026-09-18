@@ -400,7 +400,7 @@
   async function loadOrders(){
     if(!state.session){els.ordersList.innerHTML='<div class="empty"><b>سجّل الدخول لرؤية طلباتك.</b><br><button class="primary" id="ordersLogin" style="margin-top:12px">تسجيل الدخول</button></div>';$('#ordersLogin').onclick=()=>openAuth();return;}
     els.ordersList.innerHTML='<div class="loading">جارٍ تحميل الطلبات…</div>';
-    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,payment_method,total,created_at,shipping_address,order_items(product_id,variant_id,product_name,variant_title,quantity,unit_price,line_total),order_events(id,status,title,description,created_at)').order('created_at',{ascending:false});
+    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,payment_method,total,created_at,shipping_address,shipping_carrier,tracking_number,shipped_at,delivered_at,order_items(product_id,variant_id,product_name,variant_title,quantity,unit_price,line_total),order_events(id,status,title,description,created_at)').order('created_at',{ascending:false});
     if(error){els.ordersList.innerHTML='<div class="error">تعذر تحميل الطلبات.</div>';return;}
     if(!data?.length){els.ordersList.innerHTML='<div class="empty">لا توجد طلبات حتى الآن.</div>';return;}
     els.ordersList.innerHTML=data.map(o=>'<article class="card account-card orderrow" data-order="'+o.id+'"><div class="grow"><b>MK-'+String(o.order_number).padStart(6,'0')+'</b><div class="tiny">'+new Date(o.created_at).toLocaleString('ar-US')+'</div></div><span class="order-status">'+statusLabel(o.status)+'</span><span class="price">'+money(o.total)+'</span></article>').join('');
@@ -417,7 +417,7 @@
       (o.order_items||[]).map(i=>'<div class="cartrow"><div class="grow"><b>'+esc(i.product_name)+'</b><div class="tiny">'+esc(i.variant_title||'')+' × '+i.quantity+'</div></div><b>'+money(i.line_total)+'</b></div>').join('')+
       '<button class="secondary" id="reorderBtn" style="width:100%;margin-top:10px">أعد هذا الطلب</button>'+
       timeline+
-      '<div class="notice" style="margin-top:12px">عند ربط شركة الشحن سنضيف رقم التتبع والتحديثات الخارجية هنا تلقائيًا.</div>'+
+      ((o.tracking_number||o.shipping_carrier)?'<div class="summary"><div class="line"><span>شركة الشحن</span><b>'+esc(o.shipping_carrier||'—')+'</b></div><div class="line"><span>رقم التتبع</span><b>'+esc(o.tracking_number||'—')+'</b></div></div>':'<div class="notice" style="margin-top:12px">سيظهر رقم التتبع هنا فور إضافته من الإدارة.</div>')+
       (canCancel?'<button class="secondary danger" id="cancelOrderBtn" style="width:100%;margin-top:10px">إلغاء الطلب</button>':'')+
       (o.status==='delivered'?'<button class="secondary" id="returnBtn" style="width:100%;margin-top:10px">طلب إرجاع / استبدال</button>':''));
     $('[data-close]',els.panel).onclick=closeSheet;
