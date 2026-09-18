@@ -29,7 +29,8 @@
     $('#newProductBtn').onclick=()=>productModal();
     $('#newCategoryBtn').onclick=()=>categoryModal();
     $('#newCouponBtn').onclick=()=>couponModal();
-    $('#refreshOrdersBtn').onclick=loadOrders;\n    $('#refreshReturnsBtn').onclick=loadReturns;
+    $('#refreshOrdersBtn').onclick=loadOrders;
+    $('#refreshReturnsBtn').onclick=loadReturns;
     $$('.side button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
   }
   function showGate(){
