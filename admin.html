@@ -42,7 +42,12 @@
         <button data-tab="orders">الطلبات</button>
         <button data-tab="categories">الأقسام</button>
         <button data-tab="inventory">المخزون</button>
-        <button data-tab="coupons">الكوبونات</button>\n        <button data-tab="returns">الإرجاع</button>\n        <button data-tab="settings">الإعدادات</button>
+        <button data-tab="coupons">الكوبونات</button>
+        <button data-tab="returns">الإرجاع</button>
+        <button data-tab="reviews">التقييمات</button>
+        <button data-tab="support">الدعم</button>
+        <button data-tab="audit">سجل الإدارة</button>
+        <button data-tab="settings">الإعدادات</button>
       </aside>
 
       <section class="panel">
@@ -84,6 +89,11 @@
         <div id="supportTab" class="hidden">
           <div class="sectionhead"><div><h2>الدعم</h2><div class="tiny">تذاكر العملاء والمحادثات</div></div><button id="refreshSupportBtn" class="btn">تحديث</button></div>
           <div id="supportTable" class="tablewrap"></div>
+        </div>
+
+        <div id="auditTab" class="hidden">
+          <div class="sectionhead"><div><h2>سجل الإدارة</h2><div class="tiny">من غيّر ماذا ومتى — للمتابعة والمراجعة</div></div><button id="refreshAuditBtn" class="btn">تحديث</button></div>
+          <div id="auditTable" class="tablewrap"></div>
         </div>
 
         <div id="settingsTab" class="hidden">
