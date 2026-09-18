@@ -6,7 +6,7 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:cfg.currency}).format(Number(n||0));
   const slugify=s=>String(s||'').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'');
-  const state={session:null,profile:null,products:[],categories:[],orders:[],coupons:[],inventory:[],returns:[],reviews:[],support:[],audit:[],settings:null};
+  const state={session:null,profile:null,products:[],categories:[],orders:[],coupons:[],inventory:[],returns:[],reviews:[],support:[],audit:[],settings:null,stripeStatus:null};
   const gate=$('#authGate'), app=$('#adminApp'), modal=$('#modal'), modalBox=$('#modalBox');
 
   function msg(el,text,type=''){el.textContent=text;el.className='tiny '+type}
@@ -366,13 +366,44 @@
   }
   function renderSettings(){
     const el=$('#settingsContent'); if(!el||!state.settings)return;
-    el.innerHTML='<div class="form"><div class="cols2"><input class="field" id="sName" placeholder="اسم المتجر" value="'+esc(state.settings.store_name||'')+'"><input class="field" id="sSupport" type="email" placeholder="بريد الدعم" value="'+esc(state.settings.support_email||'')+'"></div><div class="cols3"><input class="field" id="sCurrency" maxlength="3" placeholder="العملة" value="'+esc(state.settings.currency||'USD')+'"><input class="field" id="sFree" type="number" min="0" step="0.01" placeholder="حد الشحن المجاني" value="'+esc(state.settings.free_shipping_threshold)+'"><input class="field" id="sShip" type="number" min="0" step="0.01" placeholder="رسوم الشحن" value="'+esc(state.settings.standard_shipping_fee)+'"></div><div class="card"><b>وضع الطلب</b><div class="form" style="margin-top:8px"><label><input id="sCheckout" type="checkbox" '+(state.settings.checkout_enabled?'checked':'')+'> السماح بإنشاء الطلبات</label><label><input id="sTestMode" type="checkbox" '+(state.settings.test_mode?'checked':'')+'> وضع الاختبار — يسمح بطلبات بدون تحصيل أموال</label><label><input id="sCod" type="checkbox" '+(state.settings.cash_on_delivery_enabled?'checked':'')+'> الدفع عند الاستلام</label><div class="tiny">عند ربط الدفع الإلكتروني سنضيفه هنا كوسيلة مستقلة ولا نعتمد على تغيير حالة الدفع يدويًا.</div></div></div><button class="btn primary" id="saveSettings">حفظ الإعدادات</button><div id="sMsg" class="tiny"></div></div>';
+    el.innerHTML='<div class="form"><div class="cols2"><input class="field" id="sName" placeholder="اسم المتجر" value="'+esc(state.settings.store_name||'')+'"><input class="field" id="sSupport" type="email" placeholder="بريد الدعم" value="'+esc(state.settings.support_email||'')+'"></div><div class="cols3"><input class="field" id="sCurrency" maxlength="3" placeholder="العملة" value="'+esc(state.settings.currency||'USD')+'"><input class="field" id="sFree" type="number" min="0" step="0.01" placeholder="حد الشحن المجاني" value="'+esc(state.settings.free_shipping_threshold)+'"><input class="field" id="sShip" type="number" min="0" step="0.01" placeholder="رسوم الشحن" value="'+esc(state.settings.standard_shipping_fee)+'"></div>'+
+      '<div class="card"><div class="sectionhead"><div><b>Stripe Checkout</b><div class="tiny">الدفع الإلكتروني الآمن من داخل مَخْرَج</div></div><span class="status" id="stripeStatusBadge">جارٍ الفحص…</span></div><div id="stripeStatusText" class="muted">نراجع إعدادات الخادم.</div><label style="display:block;margin-top:10px"><input id="sStripe" type="checkbox" '+(state.settings.stripe_online_enabled?'checked':'')+' disabled> تفعيل الدفع الإلكتروني للعملاء</label><div class="tiny" style="margin-top:8px">لن نسمح بتفعيله حتى يكون مفتاح Stripe وWebhook مضبوطين على الخادم.</div></div>'+
+      '<div class="card"><b>وضع الطلب</b><div class="form" style="margin-top:8px"><label><input id="sCheckout" type="checkbox" '+(state.settings.checkout_enabled?'checked':'')+'> السماح بإنشاء الطلبات</label><label><input id="sTestMode" type="checkbox" '+(state.settings.test_mode?'checked':'')+'> وضع الاختبار — يسمح بطلبات بدون تحصيل أموال</label><label><input id="sCod" type="checkbox" '+(state.settings.cash_on_delivery_enabled?'checked':'')+'> الدفع عند الاستلام</label></div></div><button class="btn primary" id="saveSettings">حفظ الإعدادات</button><div id="sMsg" class="tiny"></div></div>';
+    loadStripeStatus();
     $('#saveSettings',el).onclick=async()=>{
-      const row={store_name:$('#sName',el).value.trim()||'مَخْرَج',support_email:$('#sSupport',el).value.trim()||null,currency:($('#sCurrency',el).value.trim()||'USD').toUpperCase(),free_shipping_threshold:Number($('#sFree',el).value||0),standard_shipping_fee:Number($('#sShip',el).value||0),checkout_enabled:$('#sCheckout',el).checked,test_mode:$('#sTestMode',el).checked,cash_on_delivery_enabled:$('#sCod',el).checked};
+      const row={store_name:$('#sName',el).value.trim()||'مَخْرَج',support_email:$('#sSupport',el).value.trim()||null,currency:($('#sCurrency',el).value.trim()||'USD').toUpperCase(),free_shipping_threshold:Number($('#sFree',el).value||0),standard_shipping_fee:Number($('#sShip',el).value||0),checkout_enabled:$('#sCheckout',el).checked,test_mode:$('#sTestMode',el).checked,cash_on_delivery_enabled:$('#sCod',el).checked,stripe_online_enabled:state.stripeStatus?.ready?$('#sStripe',el).checked:false};
       const {error}=await sb.from('store_settings').update(row).eq('id',1);
       if(error){msg($('#sMsg',el),error.message,'bad');return}
       msg($('#sMsg',el),'تم حفظ الإعدادات.','ok');await loadSettings();
     };
+  }
+
+  async function loadStripeStatus(){
+    const badge=$('#stripeStatusBadge'),textEl=$('#stripeStatusText'),toggle=$('#sStripe');
+    try{
+      const {data,error}=await sb.functions.invoke('stripe-status',{body:{}});
+      if(error)throw error;
+      state.stripeStatus=data||{};
+      if(data?.ready){
+        badge.textContent=data.mode==='live'?'جاهز · LIVE':'جاهز · SANDBOX';
+        badge.className='status ok';
+        textEl.textContent=data.mode==='live'?'مفاتيح الدفع الحقيقي والـWebhook موجودة.':'مفاتيح الاختبار والـWebhook موجودة. يمكنك تجربة الدفع بأمان.';
+        toggle.disabled=false;
+      }else{
+        badge.textContent='غير مكتمل';
+        badge.className='status bad';
+        const missing=[];
+        if(!data?.secret_configured)missing.push('Stripe Secret Key');
+        if(!data?.webhook_configured)missing.push('Webhook Secret');
+        textEl.textContent='ينقص إعداد الخادم: '+missing.join(' + ');
+        toggle.disabled=true;toggle.checked=false;
+      }
+    }catch(e){
+      state.stripeStatus={ready:false};
+      badge.textContent='تعذر الفحص';badge.className='status bad';
+      textEl.textContent='تعذر قراءة حالة Stripe الآن.';
+      toggle.disabled=true;toggle.checked=false;
+    }
   }
 
   function statusProduct(s){return({draft:'مسودة',active:'منشور',archived:'مؤرشف'})[s]||s}
