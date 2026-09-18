@@ -6,7 +6,7 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:cfg.currency}).format(Number(n||0));
   const slugify=s=>String(s||'').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'');
-  const state={session:null,profile:null,products:[],categories:[],orders:[],coupons:[],inventory:[],returns:[],reviews:[],support:[],settings:null};
+  const state={session:null,profile:null,products:[],categories:[],orders:[],coupons:[],inventory:[],returns:[],reviews:[],support:[],audit:[],settings:null};
   const gate=$('#authGate'), app=$('#adminApp'), modal=$('#modal'), modalBox=$('#modalBox');
 
   function msg(el,text,type=''){el.textContent=text;el.className='tiny '+type}
@@ -33,6 +33,7 @@
     $('#refreshReturnsBtn').onclick=loadReturns;
     $('#refreshReviewsBtn').onclick=loadReviewsAdmin;
     $('#refreshSupportBtn').onclick=loadSupport;
+    $('#refreshAuditBtn').onclick=loadAudit;
     $$('.side button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
   }
   function showGate(){
@@ -69,11 +70,11 @@
   }
 
   async function refreshAll(){
-    await Promise.all([loadCategories(),loadProducts(),loadOrders(),loadInventory(),loadCoupons(),loadReturns(),loadReviewsAdmin(),loadSupport(),loadSettings()]);
+    await Promise.all([loadCategories(),loadProducts(),loadOrders(),loadInventory(),loadCoupons(),loadReturns(),loadReviewsAdmin(),loadSupport(),loadAudit(),loadSettings()]);
     await loadStats();
   }
   function showTab(tab){
-    ['products','orders','categories','inventory','coupons','returns','reviews','support','settings'].forEach(t=>$('#'+t+'Tab').classList.toggle('hidden',t!==tab));
+    ['products','orders','categories','inventory','coupons','returns','reviews','support','audit','settings'].forEach(t=>$('#'+t+'Tab').classList.toggle('hidden',t!==tab));
     $$('.side button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   }
 
@@ -131,13 +132,15 @@
 
   function variantRow(v={}){
     const a=v.attributes||{};
-    return '<div class="variantrow card" data-variant-id="'+esc(v.id||'')+'"><input class="field vTitle" placeholder="اسم الخيار: أسود / M" value="'+esc(v.title||'افتراضي')+'"><input class="field vSku" placeholder="SKU" value="'+esc(v.sku||'')+'"><input class="field vPrice" type="number" step="0.01" placeholder="سعر خاص" value="'+esc(v.price??'')+'"><input class="field vStock" type="number" min="0" placeholder="المخزون" value="'+esc(v.stock_quantity??0)+'"><input class="field vColor" placeholder="اللون" value="'+esc(a.color||'')+'"><input class="field vSize" placeholder="المقاس" value="'+esc(a.size||'')+'"><button class="btn danger vRemove" type="button">حذف الخيار</button></div>';
+    return '<div class="variantrow card" data-variant-id="'+esc(v.id||'')+'"><input class="field vTitle" placeholder="اسم الخيار: أسود / M" value="'+esc(v.title||'افتراضي')+'"><input class="field vSku" placeholder="SKU" value="'+esc(v.sku||'')+'"><input class="field vBarcode" placeholder="Barcode (اختياري)" value="'+esc(v.barcode||'')+'"><input class="field vPrice" type="number" step="0.01" placeholder="سعر خاص" value="'+esc(v.price??'')+'"><input class="field vStock" type="number" min="0" placeholder="المخزون" value="'+esc(v.stock_quantity??0)+'"><input class="field vWeight" type="number" min="0" placeholder="الوزن بالجرام" value="'+esc(v.weight_grams??'')+'"><input class="field vColor" placeholder="اللون" value="'+esc(a.color||'')+'"><input class="field vSize" placeholder="المقاس" value="'+esc(a.size||'')+'"><button class="btn danger vRemove" type="button">حذف الخيار</button></div>';
   }
   function productModal(p=null){
     const currentCost=Array.isArray(p?.product_costs)?p.product_costs[0]?.cost_price:p?.product_costs?.cost_price;
     openModal('<div class="sectionhead"><div><h2>'+(p?'إدارة المنتج':'منتج جديد')+'</h2><div class="tiny">كل ما تحفظه هنا يصبح جزءًا من قاعدة مَخْرَج الحقيقية</div></div><button class="btn" data-close>إغلاق</button></div>'+
       '<div class="form"><div class="cols2"><input class="field" id="pName" placeholder="اسم المنتج" value="'+esc(p?.name||'')+'"><input class="field" id="pSlug" placeholder="slug" value="'+esc(p?.slug||'')+'"></div>'+
+      '<div class="cols2"><input class="field" id="pBrand" placeholder="العلامة التجارية (اختياري)" value="'+esc(p?.brand||'')+'"><input class="field" id="pTags" placeholder="وسوم مفصولة بفواصل: هدية, رجالي, عملي" value="'+esc((p?.tags||[]).join(', '))+'"></div>'+
       '<textarea class="field" id="pDesc" rows="4" placeholder="وصف المنتج">'+esc(p?.description||'')+'</textarea>'+
+      '<textarea class="field" id="pSpecs" rows="4" placeholder="المواصفات — كل سطر: الاسم = القيمة">'+esc(Object.entries(p?.specifications||{}).map(([k,v])=>k+' = '+v).join('\n'))+'</textarea>'+
       '<div class="cols3"><select class="field" id="pCategory"><option value="">بدون قسم</option>'+state.categories.map(c=>'<option value="'+c.id+'" '+(p?.category_id===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select><select class="field" id="pStatus"><option value="draft" '+(p?.status==='draft'?'selected':'')+'>مسودة</option><option value="active" '+(p?.status==='active'?'selected':'')+'>منشور</option><option value="archived" '+(p?.status==='archived'?'selected':'')+'>مؤرشف</option></select><label class="card"><input id="pFeatured" type="checkbox" '+(p?.featured?'checked':'')+'> منتج مميز</label></div>'+
       '<div class="cols3"><input class="field" id="pBase" type="number" step="0.01" min="0" placeholder="السعر الأساسي" value="'+esc(p?.base_price??'')+'"><input class="field" id="pCompare" type="number" step="0.01" min="0" placeholder="السعر قبل الخصم" value="'+esc(p?.compare_at_price??'')+'"><input class="field" id="pCost" type="number" step="0.01" min="0" placeholder="تكلفة الشراء (إدارية)" value="'+esc(currentCost??'')+'"></div>'+
       '<div class="row"><div><b>الخيارات والمخزون</b><div class="tiny">لكل لون/مقاس SKU ومخزون مستقل</div></div><button class="btn" id="addVariant" type="button">+ خيار</button></div><div id="variantRows" class="variants">'+((p?.product_variants?.length?p.product_variants:[{}]).map(variantRow).join(''))+'</div>'+
@@ -177,7 +180,10 @@
     const m=$('#pMsg',modalBox),btn=$('#saveProduct',modalBox);
     const base=Number($('#pBase',modalBox).value);
     const costValue=$('#pCost',modalBox).value?Number($('#pCost',modalBox).value):null;
-    const row={name:$('#pName',modalBox).value.trim(),slug:slugify($('#pSlug',modalBox).value||$('#pName',modalBox).value),description:$('#pDesc',modalBox).value.trim()||null,category_id:$('#pCategory',modalBox).value||null,status:$('#pStatus',modalBox).value,base_price:base,compare_at_price:$('#pCompare',modalBox).value?Number($('#pCompare',modalBox).value):null,featured:$('#pFeatured',modalBox).checked};
+    const specifications={};
+    $('#pSpecs',modalBox).value.split(/\n+/).map(x=>x.trim()).filter(Boolean).forEach(line=>{const i=line.indexOf('=');if(i>0)specifications[line.slice(0,i).trim()]=line.slice(i+1).trim()});
+    const tags=$('#pTags',modalBox).value.split(',').map(x=>x.trim()).filter(Boolean);
+    const row={name:$('#pName',modalBox).value.trim(),slug:slugify($('#pSlug',modalBox).value||$('#pName',modalBox).value),description:$('#pDesc',modalBox).value.trim()||null,category_id:$('#pCategory',modalBox).value||null,status:$('#pStatus',modalBox).value,base_price:base,compare_at_price:$('#pCompare',modalBox).value?Number($('#pCompare',modalBox).value):null,featured:$('#pFeatured',modalBox).checked,brand:$('#pBrand',modalBox).value.trim()||null,tags,specifications};
     if(!row.name||!row.slug||!Number.isFinite(base)||base<0){msg(m,'الاسم والسعر الصحيح مطلوبان.','bad');return}
     if(row.compare_at_price!==null&&row.compare_at_price<row.base_price){msg(m,'السعر قبل الخصم يجب ألا يكون أقل من السعر الحالي.','bad');return}
     btn.disabled=true;btn.textContent='جارٍ الحفظ…';
@@ -194,9 +200,10 @@
       for(const vEl of variantEls){
         const title=$('.vTitle',vEl).value.trim()||'افتراضي',sku=$('.vSku',vEl).value.trim();
         const stock=Number($('.vStock',vEl).value||0),price=$('.vPrice',vEl).value?Number($('.vPrice',vEl).value):null;
+        const barcode=$('.vBarcode',vEl).value.trim()||null,weight_grams=$('.vWeight',vEl).value?Number($('.vWeight',vEl).value):null;
         const color=$('.vColor',vEl).value.trim(),size=$('.vSize',vEl).value.trim();
         if(!sku)throw new Error('كل خيار يحتاج SKU فريدًا.');
-        const vr={product_id:productId,title,sku,stock_quantity:stock,price,attributes:{...(color?{color}:{}),...(size?{size}:{})},is_active:true};
+        const vr={product_id:productId,title,sku,barcode,weight_grams,stock_quantity:stock,price,attributes:{...(color?{color}:{}),...(size?{size}:{})},is_active:true};
         const id=vEl.dataset.variantId;
         const {error}=id?await sb.from('product_variants').update(vr).eq('id',id):await sb.from('product_variants').insert(vr);
         if(error)throw error;
@@ -335,6 +342,23 @@
     };
   }
   function supportStatusAdmin(s){return({open:'مفتوحة',waiting_customer:'بانتظار العميل',in_progress:'قيد المعالجة',resolved:'تم الحل',closed:'مغلقة'})[s]||s}
+
+  async function loadAudit(){
+    const {data,error}=await sb.from('admin_audit_logs').select('id,actor_user_id,entity_type,entity_id,action,old_data,new_data,created_at').order('created_at',{ascending:false}).limit(300);
+    if(error)return;state.audit=data||[];renderAudit();
+  }
+  function renderAudit(){
+    const el=$('#auditTable'); if(!el)return;
+    if(!state.audit.length){el.innerHTML='<div class="empty">لا توجد تغييرات إدارية مسجلة بعد.</div>';return}
+    el.innerHTML='<table class="table"><thead><tr><th>الوقت</th><th>النوع</th><th>الإجراء</th><th>المعرف</th><th></th></tr></thead><tbody>'+
+      state.audit.map(a=>'<tr><td>'+new Date(a.created_at).toLocaleString('ar-US')+'</td><td>'+esc(a.entity_type)+'</td><td><span class="status">'+auditAction(a.action)+'</span></td><td><span class="tiny">'+esc(a.entity_id||'—')+'</span></td><td><button class="btn" data-audit="'+a.id+'">تفاصيل</button></td></tr>').join('')+'</tbody></table>';
+    $$('[data-audit]',el).forEach(b=>b.onclick=()=>auditModal(state.audit.find(a=>String(a.id)===String(b.dataset.audit))));
+  }
+  function auditModal(a){
+    openModal('<div class="sectionhead"><div><h2>تفاصيل التغيير</h2><div class="tiny">'+new Date(a.created_at).toLocaleString('ar-US')+'</div></div><button class="btn" data-close>إغلاق</button></div><div class="card"><b>النوع</b><div>'+esc(a.entity_type)+' · '+auditAction(a.action)+'</div><div class="tiny">'+esc(a.entity_id||'')+'</div></div><div class="cols2" style="margin-top:10px"><div class="card"><b>قبل</b><pre style="white-space:pre-wrap;overflow:auto">'+esc(JSON.stringify(a.old_data,null,2)||'—')+'</pre></div><div class="card"><b>بعد</b><pre style="white-space:pre-wrap;overflow:auto">'+esc(JSON.stringify(a.new_data,null,2)||'—')+'</pre></div></div>');
+    $('[data-close]',modalBox).onclick=closeModal;
+  }
+  function auditAction(a){return({insert:'إضافة',update:'تعديل',delete:'حذف'})[a]||a}
 
   async function loadSettings(){
     const {data,error}=await sb.from('store_settings').select('*').eq('id',1).single();
