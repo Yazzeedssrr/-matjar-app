@@ -16,6 +16,7 @@
     products: [], categories: [], activeCategory: 'all', search: '',
     session: null, profile: null, selectedProduct: null, selectedVariant: null,
     cart: safeJson('makhraj-cart-prod', []),
+    settings:{free_shipping_threshold:cfg.freeShippingThreshold,standard_shipping_fee:cfg.standardShipping,currency:cfg.currency},
     favs: new Set(safeJson('makhraj-favs-prod', []))
   };
 
@@ -59,7 +60,7 @@
     const { data:{ session } } = await sb.auth.getSession();
     state.session = session;
     if(session) await afterAuth();
-    await Promise.all([loadCategories(), loadProducts()]);
+    await Promise.all([loadSettings(), loadCategories(), loadProducts()]);
     bindStatic();
     render();
   }
@@ -95,6 +96,10 @@
     if(!error) state.profile=data;
   }
 
+  async function loadSettings(){
+    const {data}=await sb.from('store_settings').select('store_name,currency,free_shipping_threshold,standard_shipping_fee,support_email').eq('id',1).maybeSingle();
+    if(data) state.settings=data;
+  }
   async function loadCategories(){
     const {data,error}=await sb.from('categories').select('id,name,slug,sort_order').eq('is_active',true).order('sort_order');
     if(error){ console.error(error); state.categories=[]; return; }
@@ -206,7 +211,7 @@
   }
   function cartEstimate(){ return state.cart.reduce((s,x)=>s+Number(x.price)*x.qty,0); }
   function openCart(){
-    const sub=cartEstimate(),ship=sub>=cfg.freeShippingThreshold||sub===0?0:cfg.standardShipping,total=sub+ship;
+    const threshold=Number(state.settings.free_shipping_threshold??cfg.freeShippingThreshold),fee=Number(state.settings.standard_shipping_fee??cfg.standardShipping);const sub=cartEstimate(),ship=sub>=threshold||sub===0?0:fee,total=sub+ship;
     openSheet('<div class="sheethead"><h2 style="margin:0">سلة مَخْرَج</h2><button class="close" data-close>×</button></div>'+
       (state.cart.length?state.cart.map(x=>'<div class="cartrow"><div class="cartthumb" '+(x.image?'style="background-image:url(\''+esc(x.image)+'\')"':'')+'></div><div class="grow"><b>'+esc(x.productName)+'</b><div class="tiny">'+esc(x.variantTitle)+'</div><div class="price">'+money(x.price*x.qty)+'</div></div><div class="qty"><button data-dec="'+x.variantId+'">−</button><b>'+x.qty+'</b><button data-inc="'+x.variantId+'">+</button></div></div>').join('')+
       '<div class="summary"><div class="line"><span>المجموع التقديري</span><b>'+money(sub)+'</b></div><div class="line"><span>الشحن</span><b>'+(ship?money(ship):'مجاني')+'</b></div><div class="line total"><span>الإجمالي التقديري</span><span class="price">'+money(total)+'</span></div><div class="tiny">السعر النهائي والمخزون يعاد التحقق منهما على الخادم عند إنشاء الطلب.</div></div>'+
@@ -342,7 +347,7 @@
   async function loadOrders(){
     if(!state.session){els.ordersList.innerHTML='<div class="empty"><b>سجّل الدخول لرؤية طلباتك.</b><br><button class="primary" id="ordersLogin" style="margin-top:12px">تسجيل الدخول</button></div>';$('#ordersLogin').onclick=()=>openAuth();return;}
     els.ordersList.innerHTML='<div class="loading">جارٍ تحميل الطلبات…</div>';
-    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,total,created_at,shipping_address,order_items(product_name,variant_title,quantity,unit_price,line_total)').order('created_at',{ascending:false});
+    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,total,created_at,shipping_address,order_items(product_name,variant_title,quantity,unit_price,line_total),order_events(id,status,title,description,created_at)').order('created_at',{ascending:false});
     if(error){els.ordersList.innerHTML='<div class="error">تعذر تحميل الطلبات.</div>';return;}
     if(!data?.length){els.ordersList.innerHTML='<div class="empty">لا توجد طلبات حتى الآن.</div>';return;}
     els.ordersList.innerHTML=data.map(o=>'<article class="card account-card orderrow" data-order="'+o.id+'"><div class="grow"><b>MK-'+String(o.order_number).padStart(6,'0')+'</b><div class="tiny">'+new Date(o.created_at).toLocaleString('ar-US')+'</div></div><span class="order-status">'+statusLabel(o.status)+'</span><span class="price">'+money(o.total)+'</span></article>').join('');
@@ -352,7 +357,7 @@
     openSheet('<div class="sheethead"><div><div class="tiny">تفاصيل الطلب</div><h2 style="margin:2px 0">MK-'+String(o.order_number).padStart(6,'0')+'</h2></div><button class="close" data-close>×</button></div>'+
       '<div class="summary"><div class="line"><span>الحالة</span><b>'+statusLabel(o.status)+'</b></div><div class="line"><span>الدفع</span><b>'+paymentLabel(o.payment_status)+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(o.total)+'</span></div></div>'+
       (o.order_items||[]).map(i=>'<div class="cartrow"><div class="grow"><b>'+esc(i.product_name)+'</b><div class="tiny">'+esc(i.variant_title||'')+' × '+i.quantity+'</div></div><b>'+money(i.line_total)+'</b></div>').join('')+
-      '<div class="notice" style="margin-top:12px">سيظهر هنا لاحقًا خط التتبع الكامل، الشحن، والإرجاع عندما نربط شركات الشحن والدفع.</div>');
+      ' + ((o.order_events||[]).length?'<div class="section"><h2>تتبع الطلب</h2></div>'+(o.order_events||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(ev=>'<div class="summary"><b>'+esc(ev.title)+'</b><div class="tiny">'+new Date(ev.created_at).toLocaleString("ar-US")+'</div>'+(ev.description?'<div class="muted">'+esc(ev.description)+'</div>':'')+'</div>').join(''):'') + '<div class="notice" style="margin-top:12px">عند ربط شركة الشحن سنضيف رقم التتبع والتحديثات الخارجية هنا تلقائيًا.</div>');
     $('[data-close]',els.panel).onclick=closeSheet;
   }
 
@@ -396,5 +401,6 @@
   function statusLabel(s){return({pending:'مستلم',confirmed:'مؤكد',processing:'قيد التجهيز',shipped:'تم الشحن',delivered:'تم التسليم',cancelled:'ملغى',refunded:'مسترد'})[s]||s}
   function paymentLabel(s){return({unpaid:'غير مدفوع',authorized:'مصرح',paid:'مدفوع',partially_refunded:'استرداد جزئي',refunded:'مسترد',failed:'فشل الدفع'})[s]||s}
 
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.warn);
   init().catch(err=>{console.error(err);els.grid.innerHTML='<div class="error">حدث خطأ أثناء تشغيل المتجر.</div>';});
 })();
