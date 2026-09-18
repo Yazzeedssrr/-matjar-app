@@ -97,7 +97,7 @@
   }
 
   async function loadSettings(){
-    const {data}=await sb.from('store_settings').select('store_name,currency,free_shipping_threshold,standard_shipping_fee,support_email').eq('id',1).maybeSingle();
+    const {data}=await sb.from('store_settings').select('store_name,currency,free_shipping_threshold,standard_shipping_fee,support_email,test_mode,cash_on_delivery_enabled,checkout_enabled').eq('id',1).maybeSingle();
     if(data) state.settings=data;
   }
   async function loadCategories(){
@@ -276,6 +276,19 @@
       $('#coZip',els.panel).value=a?.postal_code||'';
     };
     fill(def);
+    const payWrap=$('#paymentMethodWrap',els.panel);
+    const methods=[];
+    if(state.settings.cash_on_delivery_enabled)methods.push(['cash_on_delivery','الدفع عند الاستلام']);
+    if(state.settings.test_mode)methods.push(['test','طلب تجريبي — بدون تحصيل أموال']);
+    if(!state.settings.checkout_enabled){
+      payWrap.innerHTML='<div class="notice">الطلبات متوقفة مؤقتًا من إعدادات المتجر.</div>';
+      $('#placeOrderBtn',els.panel).disabled=true;
+    }else if(methods.length){
+      payWrap.innerHTML='<select class="field" id="coPaymentMethod">'+methods.map((m,i)=>'<option value="'+m[0]+'">'+m[1]+'</option>').join('')+'</select>';
+    }else{
+      payWrap.innerHTML='<div class="notice">لم يتم تفعيل وسيلة دفع أو طلب بعد. اربط الدفع الإلكتروني أو فعّل الدفع عند الاستلام من الإدارة.</div>';
+      $('#placeOrderBtn',els.panel).disabled=true;
+    }
     const saved=$('#coSaved',els.panel);
     if(saved)saved.onchange=()=>{const a=list.find(x=>x.id===saved.value)||null;fill(a);$('#saveAddress',els.panel).checked=!a;};
     $('#placeOrderBtn',els.panel).onclick=placeOrder;
@@ -297,7 +310,8 @@
       if($('#saveAddress',els.panel).checked && (!savedSelect || !savedSelect.value)){
         await sb.from('addresses').insert({user_id:state.session.user.id,...address,label:'عنواني',is_default:false});
       }
-      const {data:orderId,error}=await sb.rpc('place_order',{p_shipping_address:address,p_notes:$('#coNotes',els.panel).value.trim()||null,p_coupon_code:$('#coCoupon',els.panel).value.trim()||null});
+      const paymentMethod=$('#coPaymentMethod',els.panel)?.value||'test';
+      const {data:orderId,error}=await sb.rpc('place_order',{p_shipping_address:address,p_notes:$('#coNotes',els.panel).value.trim()||null,p_coupon_code:$('#coCoupon',els.panel).value.trim()||null,p_payment_method:paymentMethod});
       if(error) throw error;
       const {data:order,error:e2}=await sb.from('orders').select('id,order_number,total,status,payment_status,created_at').eq('id',orderId).single();
       if(e2) throw e2;
@@ -386,7 +400,7 @@
   async function loadOrders(){
     if(!state.session){els.ordersList.innerHTML='<div class="empty"><b>سجّل الدخول لرؤية طلباتك.</b><br><button class="primary" id="ordersLogin" style="margin-top:12px">تسجيل الدخول</button></div>';$('#ordersLogin').onclick=()=>openAuth();return;}
     els.ordersList.innerHTML='<div class="loading">جارٍ تحميل الطلبات…</div>';
-    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,total,created_at,shipping_address,order_items(product_name,variant_title,quantity,unit_price,line_total),order_events(id,status,title,description,created_at)').order('created_at',{ascending:false});
+    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,payment_method,total,created_at,shipping_address,order_items(product_name,variant_title,quantity,unit_price,line_total),order_events(id,status,title,description,created_at)').order('created_at',{ascending:false});
     if(error){els.ordersList.innerHTML='<div class="error">تعذر تحميل الطلبات.</div>';return;}
     if(!data?.length){els.ordersList.innerHTML='<div class="empty">لا توجد طلبات حتى الآن.</div>';return;}
     els.ordersList.innerHTML=data.map(o=>'<article class="card account-card orderrow" data-order="'+o.id+'"><div class="grow"><b>MK-'+String(o.order_number).padStart(6,'0')+'</b><div class="tiny">'+new Date(o.created_at).toLocaleString('ar-US')+'</div></div><span class="order-status">'+statusLabel(o.status)+'</span><span class="price">'+money(o.total)+'</span></article>').join('');
@@ -398,7 +412,7 @@
       ? '<div class="section"><h2>تتبع الطلب</h2></div>'+events.map(ev=>'<div class="summary"><b>'+esc(ev.title)+'</b><div class="tiny">'+new Date(ev.created_at).toLocaleString('ar-US')+'</div>'+(ev.description?'<div class="muted">'+esc(ev.description)+'</div>':'')+'</div>').join('')
       : '';
     openSheet('<div class="sheethead"><div><div class="tiny">تفاصيل الطلب</div><h2 style="margin:2px 0">MK-'+String(o.order_number).padStart(6,'0')+'</h2></div><button class="close" data-close>×</button></div>'+
-      '<div class="summary"><div class="line"><span>الحالة</span><b>'+statusLabel(o.status)+'</b></div><div class="line"><span>الدفع</span><b>'+paymentLabel(o.payment_status)+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(o.total)+'</span></div></div>'+
+      '<div class="summary"><div class="line"><span>الحالة</span><b>'+statusLabel(o.status)+'</b></div><div class="line"><span>طريقة الطلب</span><b>'+paymentMethodLabel(o.payment_method)+'</b></div><div class="line"><span>الدفع</span><b>'+paymentLabel(o.payment_status)+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(o.total)+'</span></div></div>'+
       (o.order_items||[]).map(i=>'<div class="cartrow"><div class="grow"><b>'+esc(i.product_name)+'</b><div class="tiny">'+esc(i.variant_title||'')+' × '+i.quantity+'</div></div><b>'+money(i.line_total)+'</b></div>').join('')+
       timeline+
       '<div class="notice" style="margin-top:12px">عند ربط شركة الشحن سنضيف رقم التتبع والتحديثات الخارجية هنا تلقائيًا.</div>'+
@@ -510,6 +524,7 @@
   }
 
   function statusLabel(s){return({pending:'مستلم',confirmed:'مؤكد',processing:'قيد التجهيز',shipped:'تم الشحن',delivered:'تم التسليم',cancelled:'ملغى',refunded:'مسترد'})[s]||s}
+  function paymentMethodLabel(s){return({test:'تجريبي',cash_on_delivery:'عند الاستلام',online:'دفع إلكتروني'})[s]||s}
   function paymentLabel(s){return({unpaid:'غير مدفوع',authorized:'مصرح',paid:'مدفوع',partially_refunded:'استرداد جزئي',refunded:'مسترد',failed:'فشل الدفع'})[s]||s}
 
   if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(console.warn);
