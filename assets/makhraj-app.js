@@ -354,10 +354,15 @@
     $$('[data-order]',els.ordersList).forEach(r=>r.onclick=()=>openOrder(data.find(o=>o.id===r.dataset.order)));
   }
   function openOrder(o){
+    const events=[...(o.order_events||[])].sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+    const timeline=events.length
+      ? '<div class="section"><h2>تتبع الطلب</h2></div>'+events.map(ev=>'<div class="summary"><b>'+esc(ev.title)+'</b><div class="tiny">'+new Date(ev.created_at).toLocaleString('ar-US')+'</div>'+(ev.description?'<div class="muted">'+esc(ev.description)+'</div>':'')+'</div>').join('')
+      : '';
     openSheet('<div class="sheethead"><div><div class="tiny">تفاصيل الطلب</div><h2 style="margin:2px 0">MK-'+String(o.order_number).padStart(6,'0')+'</h2></div><button class="close" data-close>×</button></div>'+
       '<div class="summary"><div class="line"><span>الحالة</span><b>'+statusLabel(o.status)+'</b></div><div class="line"><span>الدفع</span><b>'+paymentLabel(o.payment_status)+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(o.total)+'</span></div></div>'+
       (o.order_items||[]).map(i=>'<div class="cartrow"><div class="grow"><b>'+esc(i.product_name)+'</b><div class="tiny">'+esc(i.variant_title||'')+' × '+i.quantity+'</div></div><b>'+money(i.line_total)+'</b></div>').join('')+
-      ' + ((o.order_events||[]).length?'<div class="section"><h2>تتبع الطلب</h2></div>'+(o.order_events||[]).sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)).map(ev=>'<div class="summary"><b>'+esc(ev.title)+'</b><div class="tiny">'+new Date(ev.created_at).toLocaleString("ar-US")+'</div>'+(ev.description?'<div class="muted">'+esc(ev.description)+'</div>':'')+'</div>').join(''):'') + '<div class="notice" style="margin-top:12px">عند ربط شركة الشحن سنضيف رقم التتبع والتحديثات الخارجية هنا تلقائيًا.</div>');
+      timeline+
+      '<div class="notice" style="margin-top:12px">عند ربط شركة الشحن سنضيف رقم التتبع والتحديثات الخارجية هنا تلقائيًا.</div>');
     $('[data-close]',els.panel).onclick=closeSheet;
   }
 
