@@ -222,7 +222,7 @@
     const max=Number(v.stock_quantity||0);
     if(existing) existing.qty=Math.min(max,existing.qty+qty);
     else state.cart.push({variantId:v.id,productId:p.id,productName:p.name,variantTitle:v.title,price:Number(v.price??p.base_price),qty:Math.min(qty,max),image:productImage(p)});
-    saveLocal();toast('أضيف إلى السلة');openCart();
+    saveLocal();window.MakhrajLearning?.event?.('add_to_cart',{productId:p.id,terms:window.MakhrajLearning?.getTerms?.()||[],context:{qty:Number(qty||1)}});toast('أضيف إلى السلة');openCart();
   }
   function changeCart(variantId,delta){
     const x=state.cart.find(i=>i.variantId===variantId); if(!x)return;
@@ -258,6 +258,7 @@
 
   async function checkout(){
     if(!state.cart.length) return;
+    window.MakhrajLearning?.event?.('checkout_start',{terms:window.MakhrajLearning?.getTerms?.()||[],context:{items:state.cart.length,subtotal:cartEstimate()}});
     if(!state.session){ openAuth('login','سجّل الدخول أولًا حتى نستطيع حفظ طلبك ومتابعته.'); return; }
     const {data:addresses}=await sb.from('addresses').select('*').order('is_default',{ascending:false}).order('created_at',{ascending:false});
     const list=addresses||[],def=list.find(a=>a.is_default)||list[0]||null;
@@ -334,6 +335,7 @@
       if(error) throw error;
       const {data:order,error:e2}=await sb.from('orders').select('id,order_number,total,status,payment_status,created_at').eq('id',orderId).single();
       if(e2) throw e2;
+      for(const item of state.cart){window.MakhrajLearning?.event?.('order_created',{productId:item.productId,terms:window.MakhrajLearning?.getTerms?.()||[],context:{order_id:orderId,qty:item.qty}})}
       state.cart=[];saveLocal();
       openSheet('<div style="text-align:center;padding:18px"><div class="mark" style="width:78px;height:78px;margin:0 auto 16px"></div><div class="tiny">تم إنشاء الطلب الحقيقي</div><h2>وصل طلبك إلى مَخْرَج</h2><div class="price" style="font-size:26px">MK-'+String(order.order_number).padStart(6,'0')+'</div><p class="muted">الإجمالي '+money(order.total)+'. حالة الدفع الآن: '+paymentLabel(order.payment_status)+'.</p><div class="notice">لن نعتبر الطلب مدفوعًا حتى نربط بوابة الدفع ونستلم تأكيد الدفع من الخادم.</div><button class="primary" id="seeOrders" style="width:100%;margin-top:14px">عرض طلباتي</button></div>');
       $('#seeOrders',els.panel).onclick=()=>{closeSheet();showView('orders');};
