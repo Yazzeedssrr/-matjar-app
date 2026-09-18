@@ -63,6 +63,23 @@
     await Promise.all([loadSettings(), loadCategories(), loadProducts()]);
     bindStatic();
     render();
+    await handlePaymentReturn();
+  }
+
+  async function handlePaymentReturn(){
+    const params=new URLSearchParams(location.search);
+    const payment=params.get('payment');
+    if(!payment)return;
+    const orderId=params.get('order_id')||sessionStorage.getItem('makhraj-pending-order')||'';
+    history.replaceState({},'',location.pathname);
+    if(payment==='success'){
+      state.cart=[];saveLocal();sessionStorage.removeItem('makhraj-pending-order');
+      openSheet('<div style="text-align:center;padding:20px"><div class="mark" style="width:78px;height:78px;margin:0 auto 16px"></div><div class="tiny">Stripe Checkout</div><h2>تمت عملية الدفع</h2><p class="muted">نؤكد العملية من خادم Stripe الآن. ستظهر حالة الطلب «مدفوع» تلقائيًا فور وصول التأكيد.</p><button class="primary" id="paymentOrders" style="width:100%">عرض طلباتي</button></div>');
+      $('#paymentOrders',els.panel).onclick=()=>{closeSheet();showView('orders');};
+      window.MakhrajLearning?.event?.('order_created',{terms:window.MakhrajLearning?.getTerms?.()||[],context:{order_id:orderId,payment:'stripe'}});
+    }else if(payment==='cancelled'){
+      toast('تم إلغاء صفحة الدفع. لم يتم تحصيل أموال.');
+    }
   }
 
   function bindStatic(){
@@ -97,7 +114,7 @@
   }
 
   async function loadSettings(){
-    const {data}=await sb.from('store_settings').select('store_name,currency,free_shipping_threshold,standard_shipping_fee,support_email,test_mode,cash_on_delivery_enabled,checkout_enabled').eq('id',1).maybeSingle();
+    const {data}=await sb.from('store_settings').select('store_name,currency,free_shipping_threshold,standard_shipping_fee,support_email,test_mode,cash_on_delivery_enabled,checkout_enabled,stripe_online_enabled').eq('id',1).maybeSingle();
     if(data) state.settings=data;
   }
   async function loadCategories(){
@@ -265,7 +282,7 @@
     openSheet('<div class="sheethead"><h2 style="margin:0">بيانات التوصيل</h2><button class="close" data-close>×</button></div>'+
       '<div class="formgrid">'+
       (list.length?'<select class="field" id="coSaved"><option value="">استخدام عنوان جديد</option>'+list.map(a=>'<option value="'+a.id+'" '+(def?.id===a.id?'selected':'')+'>'+esc(a.label||'عنوان')+' — '+esc(a.line1)+'، '+esc(a.city)+'</option>').join('')+'</select>':'')+
-      '<input class="field" id="coName" placeholder="اسم المستلم"><input class="field" id="coPhone" inputmode="tel" placeholder="رقم الهاتف"><input class="field" id="coLine1" placeholder="العنوان"><input class="field" id="coLine2" placeholder="شقة / تفاصيل إضافية (اختياري)"><div class="line"><input class="field" id="coCity" placeholder="المدينة"><input class="field" id="coState" placeholder="الولاية"></div><input class="field" id="coZip" placeholder="ZIP Code" inputmode="numeric"><input class="field" id="coCoupon" placeholder="كود خصم (اختياري)"><textarea class="field" id="coNotes" rows="3" placeholder="ملاحظات للطلب (اختياري)"></textarea><label class="tiny"><input type="checkbox" id="saveAddress" '+(!def?'checked':'')+'> حفظ هذا العنوان في حسابي</label><button class="primary" id="placeOrderBtn">إنشاء الطلب</button><div id="checkoutMsg" class="tiny"></div></div>');
+      '<input class="field" id="coName" placeholder="اسم المستلم"><input class="field" id="coPhone" inputmode="tel" placeholder="رقم الهاتف"><input class="field" id="coLine1" placeholder="العنوان"><input class="field" id="coLine2" placeholder="شقة / تفاصيل إضافية (اختياري)"><div class="line"><input class="field" id="coCity" placeholder="المدينة"><input class="field" id="coState" placeholder="الولاية"></div><input class="field" id="coZip" placeholder="ZIP Code" inputmode="numeric"><div class="line"><input class="field" id="coCoupon" placeholder="كود خصم (اختياري)"><button class="secondary" id="applyCouponBtn" type="button">تطبيق</button></div><div id="quoteSummary"></div><div id="paymentMethodWrap"></div><textarea class="field" id="coNotes" rows="3" placeholder="ملاحظات للطلب (اختياري)"></textarea><label class="tiny"><input type="checkbox" id="saveAddress" '+(!def?'checked':'')+'> حفظ هذا العنوان في حسابي</label><button class="primary" id="placeOrderBtn">متابعة الدفع</button><div id="checkoutMsg" class="tiny"></div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     const fill=a=>{
       $('#coName',els.panel).value=a?.recipient_name||state.profile?.full_name||'';
@@ -279,6 +296,7 @@
     fill(def);
     const payWrap=$('#paymentMethodWrap',els.panel);
     const methods=[];
+    if(state.settings.stripe_online_enabled)methods.push(['online','الدفع الآمن أونلاين عبر Stripe']);
     if(state.settings.cash_on_delivery_enabled)methods.push(['cash_on_delivery','الدفع عند الاستلام']);
     if(state.settings.test_mode)methods.push(['test','طلب تجريبي — بدون تحصيل أموال']);
     if(!state.settings.checkout_enabled){
@@ -331,13 +349,29 @@
         await sb.from('addresses').insert({user_id:state.session.user.id,...address,label:'عنواني',is_default:false});
       }
       const paymentMethod=$('#coPaymentMethod',els.panel)?.value||'test';
+      if(paymentMethod==='online'){
+        btn.textContent='جارٍ فتح الدفع الآمن…';
+        const {data,error}=await sb.functions.invoke('create-stripe-checkout',{
+          body:{
+            shipping_address:address,
+            notes:$('#coNotes',els.panel).value.trim()||null,
+            coupon_code:$('#coCoupon',els.panel).value.trim()||null
+          }
+        });
+        if(error) throw error;
+        if(!data?.checkout_url) throw new Error(data?.error||'تعذر إنشاء جلسة الدفع');
+        sessionStorage.setItem('makhraj-pending-order',String(data.order_id||''));
+        location.href=data.checkout_url;
+        return;
+      }
+
       const {data:orderId,error}=await sb.rpc('place_order',{p_shipping_address:address,p_notes:$('#coNotes',els.panel).value.trim()||null,p_coupon_code:$('#coCoupon',els.panel).value.trim()||null,p_payment_method:paymentMethod});
       if(error) throw error;
       const {data:order,error:e2}=await sb.from('orders').select('id,order_number,total,status,payment_status,created_at').eq('id',orderId).single();
       if(e2) throw e2;
       for(const item of state.cart){window.MakhrajLearning?.event?.('order_created',{productId:item.productId,terms:window.MakhrajLearning?.getTerms?.()||[],context:{order_id:orderId,qty:item.qty}})}
       state.cart=[];saveLocal();
-      openSheet('<div style="text-align:center;padding:18px"><div class="mark" style="width:78px;height:78px;margin:0 auto 16px"></div><div class="tiny">تم إنشاء الطلب الحقيقي</div><h2>وصل طلبك إلى مَخْرَج</h2><div class="price" style="font-size:26px">MK-'+String(order.order_number).padStart(6,'0')+'</div><p class="muted">الإجمالي '+money(order.total)+'. حالة الدفع الآن: '+paymentLabel(order.payment_status)+'.</p><div class="notice">لن نعتبر الطلب مدفوعًا حتى نربط بوابة الدفع ونستلم تأكيد الدفع من الخادم.</div><button class="primary" id="seeOrders" style="width:100%;margin-top:14px">عرض طلباتي</button></div>');
+      openSheet('<div style="text-align:center;padding:18px"><div class="mark" style="width:78px;height:78px;margin:0 auto 16px"></div><div class="tiny">تم إنشاء الطلب</div><h2>وصل طلبك إلى مَخْرَج</h2><div class="price" style="font-size:26px">MK-'+String(order.order_number).padStart(6,'0')+'</div><p class="muted">الإجمالي '+money(order.total)+'. حالة الدفع الآن: '+paymentLabel(order.payment_status)+'.</p><button class="primary" id="seeOrders" style="width:100%;margin-top:14px">عرض طلباتي</button></div>');
       $('#seeOrders',els.panel).onclick=()=>{closeSheet();showView('orders');};
     }catch(e){
       console.error(e);btn.disabled=false;btn.textContent='إنشاء الطلب';
