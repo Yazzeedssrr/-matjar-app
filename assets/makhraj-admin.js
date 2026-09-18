@@ -6,7 +6,7 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:cfg.currency}).format(Number(n||0));
   const slugify=s=>String(s||'').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'');
-  const state={session:null,profile:null,products:[],categories:[],orders:[],coupons:[],inventory:[]};
+  const state={session:null,profile:null,products:[],categories:[],orders:[],coupons:[],inventory:[],returns:[],settings:null};
   const gate=$('#authGate'), app=$('#adminApp'), modal=$('#modal'), modalBox=$('#modalBox');
 
   function msg(el,text,type=''){el.textContent=text;el.className='tiny '+type}
@@ -29,7 +29,7 @@
     $('#newProductBtn').onclick=()=>productModal();
     $('#newCategoryBtn').onclick=()=>categoryModal();
     $('#newCouponBtn').onclick=()=>couponModal();
-    $('#refreshOrdersBtn').onclick=loadOrders;
+    $('#refreshOrdersBtn').onclick=loadOrders;\n    $('#refreshReturnsBtn').onclick=loadReturns;
     $$('.side button').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));
   }
   function showGate(){
@@ -66,11 +66,11 @@
   }
 
   async function refreshAll(){
-    await Promise.all([loadCategories(),loadProducts(),loadOrders(),loadInventory(),loadCoupons()]);
+    await Promise.all([loadCategories(),loadProducts(),loadOrders(),loadInventory(),loadCoupons(),loadReturns(),loadSettings()]);
     await loadStats();
   }
   function showTab(tab){
-    ['products','orders','categories','inventory','coupons'].forEach(t=>$('#'+t+'Tab').classList.toggle('hidden',t!==tab));
+    ['products','orders','categories','inventory','coupons','returns','settings'].forEach(t=>$('#'+t+'Tab').classList.toggle('hidden',t!==tab));
     $$('.side button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   }
 
@@ -257,6 +257,46 @@
     $('[data-close]',modalBox).onclick=closeModal;$('#cType',modalBox).value=c?.discount_type||'percent';
     if(c?.starts_at)$('#cStart',modalBox).value=new Date(c.starts_at).toISOString().slice(0,16);if(c?.ends_at)$('#cEnd',modalBox).value=new Date(c.ends_at).toISOString().slice(0,16);
     $('#saveCoupon',modalBox).onclick=async()=>{const row={code:$('#cCode',modalBox).value.trim().toUpperCase(),discount_type:$('#cType',modalBox).value,discount_value:Number($('#cValue',modalBox).value),minimum_order:Number($('#cMin',modalBox).value||0),usage_limit:$('#cLimit',modalBox).value?Number($('#cLimit',modalBox).value):null,starts_at:$('#cStart',modalBox).value?new Date($('#cStart',modalBox).value).toISOString():null,ends_at:$('#cEnd',modalBox).value?new Date($('#cEnd',modalBox).value).toISOString():null,is_active:$('#cActive',modalBox).checked};if(!row.code||!row.discount_value){msg($('#cMsg',modalBox),'الكود والقيمة مطلوبان.','bad');return}const q=c?sb.from('coupons').update(row).eq('id',c.id):sb.from('coupons').insert(row);const {error}=await q;if(error){msg($('#cMsg',modalBox),error.message,'bad');return}closeModal();await loadCoupons()};
+  }
+
+  async function loadReturns(){
+    const {data,error}=await sb.from('returns').select('id,order_id,user_id,reason,status,refund_amount,created_at,updated_at,orders(order_number,total,payment_status,status)').order('created_at',{ascending:false}).limit(200);
+    if(error)return;
+    state.returns=data||[];renderReturns();
+  }
+  function renderReturns(){
+    const el=$('#returnsTable'); if(!el)return;
+    if(!state.returns.length){el.innerHTML='<div class="empty">لا توجد طلبات إرجاع.</div>';return}
+    el.innerHTML='<table class="table"><thead><tr><th>الطلب</th><th>السبب</th><th>الحالة</th><th>المبلغ</th><th>التاريخ</th><th></th></tr></thead><tbody>'+
+      state.returns.map(r=>'<tr><td><b>MK-'+String(r.orders?.order_number||'').padStart(6,'0')+'</b></td><td>'+esc(r.reason)+'</td><td><span class="status">'+esc(r.status)+'</span></td><td>'+money(r.refund_amount||0)+'</td><td>'+new Date(r.created_at).toLocaleString('ar-US')+'</td><td><button class="btn" data-return="'+r.id+'">فتح</button></td></tr>').join('')+'</tbody></table>';
+    $$('[data-return]',el).forEach(b=>b.onclick=()=>returnModal(state.returns.find(r=>r.id===b.dataset.return)));
+  }
+  function returnModal(r){
+    openModal('<div class="sectionhead"><div><h2>طلب إرجاع</h2><div class="tiny">MK-'+String(r.orders?.order_number||'').padStart(6,'0')+'</div></div><button class="btn" data-close>إغلاق</button></div>'+
+      '<div class="card"><b>سبب العميل</b><p class="muted">'+esc(r.reason)+'</p></div>'+
+      '<div class="form" style="margin-top:10px"><select class="field" id="rStatus"><option value="requested">مطلوب</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option><option value="received">تم استلام المرتجع</option><option value="refunded">تم الاسترداد</option><option value="cancelled">ملغى</option></select><input class="field" id="rRefund" type="number" min="0" step="0.01" placeholder="مبلغ الاسترداد" value="'+esc(r.refund_amount??'')+'"><div class="notice">تغيير الحالة هنا لا يرسل المال تلقائيًا. عند ربط بوابة الدفع سننفذ الاسترداد عبر مزود الدفع ثم نحدّث الحالة من الخادم.</div><button class="btn primary" id="saveReturn">حفظ</button><div id="rMsg" class="tiny"></div></div>');
+    $('[data-close]',modalBox).onclick=closeModal;$('#rStatus',modalBox).value=r.status;
+    $('#saveReturn',modalBox).onclick=async()=>{
+      const row={status:$('#rStatus',modalBox).value,refund_amount:$('#rRefund',modalBox).value?Number($('#rRefund',modalBox).value):null};
+      const {error}=await sb.from('returns').update(row).eq('id',r.id);
+      if(error){msg($('#rMsg',modalBox),error.message,'bad');return}
+      closeModal();await loadReturns();
+    };
+  }
+
+  async function loadSettings(){
+    const {data,error}=await sb.from('store_settings').select('*').eq('id',1).single();
+    if(error)return;state.settings=data;renderSettings();
+  }
+  function renderSettings(){
+    const el=$('#settingsContent'); if(!el||!state.settings)return;
+    el.innerHTML='<div class="form"><div class="cols2"><input class="field" id="sName" placeholder="اسم المتجر" value="'+esc(state.settings.store_name||'')+'"><input class="field" id="sSupport" type="email" placeholder="بريد الدعم" value="'+esc(state.settings.support_email||'')+'"></div><div class="cols3"><input class="field" id="sCurrency" maxlength="3" placeholder="العملة" value="'+esc(state.settings.currency||'USD')+'"><input class="field" id="sFree" type="number" min="0" step="0.01" placeholder="حد الشحن المجاني" value="'+esc(state.settings.free_shipping_threshold)+'"><input class="field" id="sShip" type="number" min="0" step="0.01" placeholder="رسوم الشحن" value="'+esc(state.settings.standard_shipping_fee)+'"></div><button class="btn primary" id="saveSettings">حفظ الإعدادات</button><div id="sMsg" class="tiny"></div></div>';
+    $('#saveSettings',el).onclick=async()=>{
+      const row={store_name:$('#sName',el).value.trim()||'مَخْرَج',support_email:$('#sSupport',el).value.trim()||null,currency:($('#sCurrency',el).value.trim()||'USD').toUpperCase(),free_shipping_threshold:Number($('#sFree',el).value||0),standard_shipping_fee:Number($('#sShip',el).value||0)};
+      const {error}=await sb.from('store_settings').update(row).eq('id',1);
+      if(error){msg($('#sMsg',el),error.message,'bad');return}
+      msg($('#sMsg',el),'تم حفظ الإعدادات.','ok');await loadSettings();
+    };
   }
 
   function statusProduct(s){return({draft:'مسودة',active:'منشور',archived:'مؤرشف'})[s]||s}
