@@ -291,7 +291,26 @@
     }
     const saved=$('#coSaved',els.panel);
     if(saved)saved.onchange=()=>{const a=list.find(x=>x.id===saved.value)||null;fill(a);$('#saveAddress',els.panel).checked=!a;};
+    $('#applyCouponBtn',els.panel).onclick=updateCheckoutQuote;
     $('#placeOrderBtn',els.panel).onclick=placeOrder;
+    updateCheckoutQuote();
+  }
+
+  async function updateCheckoutQuote(){
+    const box=$('#quoteSummary',els.panel); if(!box)return;
+    box.innerHTML='<div class="tiny">جارٍ حساب الإجمالي من الخادم…</div>';
+    try{
+      await syncCartToServer();
+      const code=$('#coCoupon',els.panel)?.value.trim()||null;
+      const {data,error}=await sb.rpc('quote_cart',{p_coupon_code:code});
+      if(error)throw error;
+      const couponText=code
+        ? (data.coupon_valid?'<div class="ok">تم تطبيق الكوبون.</div>':'<div class="danger">'+(data.coupon_message==='minimum_order_not_met'?'لم تصل للحد الأدنى لهذا الكوبون.':'الكوبون غير صالح أو منتهي.')+'</div>')
+        : '';
+      box.innerHTML='<div class="summary"><div class="line"><span>المنتجات</span><b>'+money(data.subtotal)+'</b></div><div class="line"><span>الخصم</span><b>'+money(data.discount_total)+'</b></div><div class="line"><span>الشحن</span><b>'+(Number(data.shipping_total)===0?'مجاني':money(data.shipping_total))+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(data.total)+'</span></div>'+couponText+'</div>';
+    }catch(e){
+      console.error(e);box.innerHTML='<div class="danger">تعذر حساب الإجمالي الآن. '+esc(e.message||'')+'</div>';
+    }
   }
 
   async function placeOrder(){
