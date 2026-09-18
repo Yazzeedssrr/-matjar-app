@@ -293,7 +293,10 @@
     btn.disabled=true;btn.textContent='جارٍ التحقق وإنشاء الطلب…';msg.textContent='';
     try{
       await syncCartToServer();
-      const savedSelect=$('#coSaved',els.panel);\n      if($('#saveAddress',els.panel).checked && (!savedSelect || !savedSelect.value)){\n        await sb.from('addresses').insert({user_id:state.session.user.id,...address,label:'عنواني',is_default:false});\n      }
+      const savedSelect=$('#coSaved',els.panel);
+      if($('#saveAddress',els.panel).checked && (!savedSelect || !savedSelect.value)){
+        await sb.from('addresses').insert({user_id:state.session.user.id,...address,label:'عنواني',is_default:false});
+      }
       const {data:orderId,error}=await sb.rpc('place_order',{p_shipping_address:address,p_notes:$('#coNotes',els.panel).value.trim()||null,p_coupon_code:$('#coCoupon',els.panel).value.trim()||null});
       if(error) throw error;
       const {data:order,error:e2}=await sb.from('orders').select('id,order_number,total,status,payment_status,created_at').eq('id',orderId).single();
