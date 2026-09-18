@@ -177,7 +177,8 @@
       '<div class="tiny">اختر الخيار المناسب</div><div class="variant-list" id="variantList">'+
       (variants.length?variants.map((v,i)=>'<button class="variant '+(i===0?'on':'')+'" data-variant="'+v.id+'">'+esc(v.title)+' · '+money(v.price??p.base_price)+' <span class="tiny">('+v.stock_quantity+')</span></button>').join(''):'<span class="danger">نفد المخزون</span>')+
       '</div><div class="line"><div class="qty"><button id="qtyMinus">−</button><b id="qtyValue">1</b><button id="qtyPlus">+</button></div><span class="tiny" id="stockText">'+(state.selectedVariant?'المتاح '+state.selectedVariant.stock_quantity:'')+'</span></div>'+
-      '<button class="primary" id="addToCartBtn" style="width:100%;margin-top:16px" '+(!state.selectedVariant?'disabled':'')+'>أضف إلى السلة</button>');
+      '<button class="primary" id="addToCartBtn" style="width:100%;margin-top:16px" '+(!state.selectedVariant?'disabled':'')+'>أضف إلى السلة</button>'+
+      '<div class="section"><h2>التقييمات</h2><span class="tiny">من مشتريات مؤكدة</span></div><div id="reviewsArea"><div class="loading">جارٍ تحميل التقييمات…</div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('[data-fav]',els.panel).onclick=()=>{toggleFavorite(p.id);openProduct(p.id);};
     let qty=1;
@@ -192,6 +193,27 @@
       $('#stockText',els.panel).textContent='المتاح '+state.selectedVariant.stock_quantity;
     });
     $('#addToCartBtn',els.panel).onclick=()=>addToCart(p,state.selectedVariant,qty);
+    loadReviews(p.id);
+  }
+
+  async function loadReviews(productId){
+    const area=$('#reviewsArea',els.panel); if(!area)return;
+    const {data,error}=await sb.from('reviews').select('id,rating,title,body,is_approved,created_at,user_id').eq('product_id',productId).order('created_at',{ascending:false});
+    if(error){area.innerHTML='<div class="error">تعذر تحميل التقييمات.</div>';return}
+    const reviews=data||[];
+    const avg=reviews.filter(r=>r.is_approved).length?reviews.filter(r=>r.is_approved).reduce((s,r)=>s+r.rating,0)/reviews.filter(r=>r.is_approved).length:null;
+    area.innerHTML=(avg?'<div class="summary"><div class="line"><b>متوسط التقييم</b><span class="price">★ '+avg.toFixed(1)+'</span></div></div>':'')+
+      (reviews.length?reviews.map(r=>'<div class="summary"><div class="line"><b>'+'★'.repeat(r.rating)+'</b><span class="tiny">'+new Date(r.created_at).toLocaleDateString('ar-US')+'</span></div>'+(r.title?'<b>'+esc(r.title)+'</b>':'')+'<div class="muted">'+esc(r.body||'')+'</div>'+(!r.is_approved?'<div class="tiny">بانتظار المراجعة</div>':'')+'</div>').join(''):'<div class="empty">لا توجد تقييمات بعد.</div>')+
+      (state.session?'<div class="summary"><b>قيّم مشترياتك</b><div class="formgrid" style="margin-top:8px"><select class="field" id="reviewRating"><option value="5">5 نجوم</option><option value="4">4 نجوم</option><option value="3">3 نجوم</option><option value="2">نجمتان</option><option value="1">نجمة</option></select><input class="field" id="reviewTitle" placeholder="عنوان التقييم"><textarea class="field" id="reviewBody" rows="3" placeholder="اكتب تجربتك"></textarea><button class="secondary" id="submitReview">إرسال التقييم</button><div id="reviewMsg" class="tiny"></div></div></div>':'<div class="tiny">سجّل الدخول بعد استلام طلبك لتقييم المنتج.</div>');
+    const btn=$('#submitReview',area); if(btn)btn.onclick=()=>submitReview(productId);
+  }
+
+  async function submitReview(productId){
+    const area=$('#reviewsArea',els.panel),m=$('#reviewMsg',area);
+    const row={user_id:state.session.user.id,product_id:productId,rating:Number($('#reviewRating',area).value),title:$('#reviewTitle',area).value.trim()||null,body:$('#reviewBody',area).value.trim()||null};
+    const {error}=await sb.from('reviews').upsert(row,{onConflict:'user_id,product_id'});
+    if(error){m.textContent=error.message?.includes('delivered purchase')?'يمكنك التقييم بعد استلام طلب يحتوي هذا المنتج.':error.message;m.className='danger';return}
+    toast('تم إرسال تقييمك للمراجعة');loadReviews(productId);
   }
 
   function addToCart(p,v,qty){
@@ -362,8 +384,23 @@
       '<div class="summary"><div class="line"><span>الحالة</span><b>'+statusLabel(o.status)+'</b></div><div class="line"><span>الدفع</span><b>'+paymentLabel(o.payment_status)+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(o.total)+'</span></div></div>'+
       (o.order_items||[]).map(i=>'<div class="cartrow"><div class="grow"><b>'+esc(i.product_name)+'</b><div class="tiny">'+esc(i.variant_title||'')+' × '+i.quantity+'</div></div><b>'+money(i.line_total)+'</b></div>').join('')+
       timeline+
-      '<div class="notice" style="margin-top:12px">عند ربط شركة الشحن سنضيف رقم التتبع والتحديثات الخارجية هنا تلقائيًا.</div>');
+      '<div class="notice" style="margin-top:12px">عند ربط شركة الشحن سنضيف رقم التتبع والتحديثات الخارجية هنا تلقائيًا.</div>'+
+      (o.status==='delivered'?'<button class="secondary" id="returnBtn" style="width:100%;margin-top:10px">طلب إرجاع / استبدال</button>':''));
     $('[data-close]',els.panel).onclick=closeSheet;
+    const rb=$('#returnBtn',els.panel); if(rb)rb.onclick=()=>returnRequest(o.id);
+  }
+
+  function returnRequest(orderId){
+    openSheet('<div class="sheethead"><h2 style="margin:0">طلب إرجاع</h2><button class="close" data-close>×</button></div><p class="muted">اشرح سبب الإرجاع أو الاستبدال. الطلب يذهب إلى لوحة الإدارة للمراجعة.</p><textarea class="field" id="returnReason" rows="5" placeholder="سبب الإرجاع"></textarea><button class="primary" id="sendReturn" style="width:100%;margin-top:10px">إرسال الطلب</button><div id="returnMsg" class="tiny"></div>');
+    $('[data-close]',els.panel).onclick=closeSheet;
+    $('#sendReturn',els.panel).onclick=async()=>{
+      const reason=$('#returnReason',els.panel).value.trim(),m=$('#returnMsg',els.panel);
+      if(!reason){m.textContent='اكتب السبب أولًا.';return}
+      const {error}=await sb.from('returns').insert({order_id:orderId,user_id:state.session.user.id,reason});
+      if(error){m.textContent=error.message;m.className='danger';return}
+      openSheet('<div style="text-align:center;padding:20px"><div class="mark" style="margin:auto"></div><h2>تم إرسال طلب الإرجاع</h2><p class="muted">سنضيف لاحقًا إشعارات وتحديثات حالة الإرجاع هنا.</p><button class="primary" data-close>حسنًا</button></div>');
+      $('[data-close]',els.panel).onclick=closeSheet;
+    };
   }
 
   function renderAccount(){
@@ -372,13 +409,41 @@
       els.accountContent.innerHTML='<div class="card account-card"><h3>حساب مَخْرَج</h3><p class="muted">احفظ طلباتك وعناوينك ومفضلاتك على حسابك.</p><button class="primary" id="accLogin">تسجيل الدخول</button> <button class="secondary" id="accSignup">إنشاء حساب</button></div>';
       $('#accLogin').onclick=()=>openAuth('login');$('#accSignup').onclick=()=>openAuth('signup');return;
     }
-    els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div>';
-    $('#accOrders').onclick=()=>showView('orders');$('#accFavs').onclick=()=>renderFavArea();$('#accLogout').onclick=async()=>{await sb.auth.signOut();state.session=null;state.profile=null;toast('تم تسجيل الخروج');renderAccount();};
+    els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accAddresses">عناويني</button><button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div><div id="accountExtra"></div>';
+    $('#accOrders').onclick=()=>showView('orders');
+    $('#accFavs').onclick=()=>renderFavArea();
+    $('#accAddresses').onclick=()=>renderAddresses();
+    $('#accLogout').onclick=async()=>{await sb.auth.signOut();state.session=null;state.profile=null;toast('تم تسجيل الخروج');renderAccount();};
   }
+
   function renderFavArea(){
     const list=state.products.filter(p=>state.favs.has(p.id)),area=$('#favArea');
     area.innerHTML='<div class="section"><h2>المفضلة</h2><span class="tiny">'+list.length+'</span></div>'+(list.length?'<div class="grid">'+list.map(p=>'<article class="card account-card" data-favopen="'+p.id+'"><b>'+esc(p.name)+'</b><div class="price">'+money(minPrice(p))+'</div></article>').join('')+'</div>':'<div class="empty">لا توجد منتجات في المفضلة.</div>');
     $$('[data-favopen]',area).forEach(x=>x.onclick=()=>openProduct(x.dataset.favopen));
+  }
+
+  async function renderAddresses(){
+    const area=$('#accountExtra'); if(!area)return;
+    area.innerHTML='<div class="section"><h2>عناويني</h2><button class="secondary" id="newAddress">+ عنوان</button></div><div class="loading">جارٍ التحميل…</div>';
+    const {data,error}=await sb.from('addresses').select('*').order('is_default',{ascending:false}).order('created_at',{ascending:false});
+    if(error){area.innerHTML='<div class="error">تعذر تحميل العناوين.</div>';return}
+    area.innerHTML='<div class="section"><h2>عناويني</h2><button class="secondary" id="newAddress">+ عنوان</button></div>'+
+      ((data||[]).length?(data||[]).map(a=>'<div class="summary"><div class="line"><div><b>'+esc(a.label||'عنوان')+'</b>'+(a.is_default?' <span class="badge">افتراضي</span>':'')+'<div class="muted">'+esc(a.recipient_name)+' · '+esc(a.phone||'')+'<br>'+esc(a.line1)+' '+esc(a.line2||'')+'<br>'+esc(a.city)+' '+esc(a.state||'')+' '+esc(a.postal_code||'')+'</div></div><button class="iconbtn" data-address="'+a.id+'">تعديل</button></div></div>').join(''):'<div class="empty">لم تحفظ أي عنوان بعد.</div>');
+    $('#newAddress',area).onclick=()=>addressModal();
+    $$('[data-address]',area).forEach(b=>b.onclick=()=>addressModal((data||[]).find(a=>a.id===b.dataset.address)));
+  }
+
+  function addressModal(a=null){
+    openSheet('<div class="sheethead"><h2 style="margin:0">'+(a?'تعديل العنوان':'عنوان جديد')+'</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="aLabel" placeholder="اسم العنوان: المنزل" value="'+esc(a?.label||'')+'"><input class="field" id="aName" placeholder="اسم المستلم" value="'+esc(a?.recipient_name||state.profile?.full_name||'')+'"><input class="field" id="aPhone" placeholder="الهاتف" inputmode="tel" value="'+esc(a?.phone||state.profile?.phone||'')+'"><input class="field" id="aLine1" placeholder="العنوان" value="'+esc(a?.line1||'')+'"><input class="field" id="aLine2" placeholder="تفاصيل إضافية" value="'+esc(a?.line2||'')+'"><div class="line"><input class="field" id="aCity" placeholder="المدينة" value="'+esc(a?.city||'')+'"><input class="field" id="aState" placeholder="الولاية" value="'+esc(a?.state||'')+'"></div><input class="field" id="aZip" placeholder="ZIP Code" value="'+esc(a?.postal_code||'')+'"><label class="tiny"><input type="checkbox" id="aDefault" '+(a?.is_default?'checked':'')+'> اجعله العنوان الافتراضي</label><button class="primary" id="saveAddressBtn">حفظ العنوان</button>'+(a?'<button class="secondary" id="deleteAddressBtn">حذف العنوان</button>':'')+'<div id="addressMsg" class="tiny"></div></div>');
+    $('[data-close]',els.panel).onclick=closeSheet;
+    $('#saveAddressBtn',els.panel).onclick=async()=>{
+      const row={user_id:state.session.user.id,label:$('#aLabel',els.panel).value.trim()||null,recipient_name:$('#aName',els.panel).value.trim(),phone:$('#aPhone',els.panel).value.trim()||null,line1:$('#aLine1',els.panel).value.trim(),line2:$('#aLine2',els.panel).value.trim()||null,city:$('#aCity',els.panel).value.trim(),state:$('#aState',els.panel).value.trim()||null,postal_code:$('#aZip',els.panel).value.trim()||null,country:'US',is_default:$('#aDefault',els.panel).checked};
+      const m=$('#addressMsg',els.panel); if(!row.recipient_name||!row.line1||!row.city){m.textContent='الاسم والعنوان والمدينة مطلوبة.';m.className='danger';return}
+      const q=a?sb.from('addresses').update(row).eq('id',a.id):sb.from('addresses').insert(row);
+      const {error}=await q;if(error){m.textContent=error.message;m.className='danger';return}
+      closeSheet();renderAddresses();toast('تم حفظ العنوان');
+    };
+    const del=$('#deleteAddressBtn',els.panel);if(del)del.onclick=async()=>{const {error}=await sb.from('addresses').delete().eq('id',a.id);if(error){$('#addressMsg',els.panel).textContent=error.message;return}closeSheet();renderAddresses();};
   }
 
   function openSmart(){
