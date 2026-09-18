@@ -467,12 +467,13 @@
       els.accountContent.innerHTML='<div class="card account-card"><h3>حساب مَخْرَج</h3><p class="muted">احفظ طلباتك وعناوينك ومفضلاتك على حسابك.</p><button class="primary" id="accLogin">تسجيل الدخول</button> <button class="secondary" id="accSignup">إنشاء حساب</button></div>';
       $('#accLogin').onclick=()=>openAuth('login');$('#accSignup').onclick=()=>openAuth('signup');return;
     }
-    els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accProfile">بياناتي</button><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accAddresses">عناويني</button><button class="secondary" id="accNotifications">الإشعارات</button><button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div><div id="accountExtra"></div>';
+    els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accProfile">بياناتي</button><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accAddresses">عناويني</button><button class="secondary" id="accNotifications">الإشعارات</button><button class="secondary" id="accSupport">الدعم</button><button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div><div id="accountExtra"></div>';
     $('#accProfile').onclick=profileModal;
     $('#accOrders').onclick=()=>showView('orders');
     $('#accFavs').onclick=()=>renderFavArea();
     $('#accAddresses').onclick=()=>renderAddresses();
     $('#accNotifications').onclick=()=>renderNotifications();
+    $('#accSupport').onclick=()=>renderSupport();
     $('#accLogout').onclick=async()=>{await sb.auth.signOut();state.session=null;state.profile=null;toast('تم تسجيل الخروج');renderAccount();};
   }
 
@@ -516,6 +517,50 @@
     };
     const del=$('#deleteAddressBtn',els.panel);if(del)del.onclick=async()=>{const {error}=await sb.from('addresses').delete().eq('id',a.id);if(error){$('#addressMsg',els.panel).textContent=error.message;return}closeSheet();renderAddresses();};
   }
+
+  async function renderSupport(){
+    const area=$('#accountExtra'); if(!area)return;
+    area.innerHTML='<div class="section"><h2>الدعم</h2><button class="secondary" id="newTicket">+ تذكرة جديدة</button></div><div class="loading">جارٍ التحميل…</div>';
+    const {data,error}=await sb.from('support_tickets').select('id,subject,status,priority,order_id,created_at,updated_at').order('updated_at',{ascending:false});
+    if(error){area.innerHTML='<div class="error">تعذر تحميل الدعم.</div>';return}
+    const rows=data||[];
+    area.innerHTML='<div class="section"><h2>الدعم</h2><button class="secondary" id="newTicket">+ تذكرة جديدة</button></div>'+
+      (rows.length?rows.map(t=>'<button class="summary" data-ticket="'+t.id+'" style="width:100%;text-align:right;color:#fff"><div class="line"><b>'+esc(t.subject)+'</b><span class="badge">'+supportStatus(t.status)+'</span></div><div class="tiny">'+new Date(t.updated_at).toLocaleString('ar-US')+'</div></button>').join(''):'<div class="empty">لا توجد تذاكر دعم.</div>');
+    $('#newTicket',area).onclick=newTicketModal;
+    $$('[data-ticket]',area).forEach(b=>b.onclick=()=>openTicket(b.dataset.ticket));
+  }
+
+  async function newTicketModal(){
+    const {data:orders}=await sb.from('orders').select('id,order_number').order('created_at',{ascending:false}).limit(20);
+    openSheet('<div class="sheethead"><h2 style="margin:0">تذكرة دعم جديدة</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="ticketSubject" placeholder="عنوان المشكلة"><select class="field" id="ticketOrder"><option value="">بدون طلب مرتبط</option>'+(orders||[]).map(o=>'<option value="'+o.id+'">MK-'+String(o.order_number).padStart(6,'0')+'</option>').join('')+'</select><textarea class="field" id="ticketMessage" rows="5" placeholder="اشرح ما الذي تحتاج مساعدتنا فيه"></textarea><button class="primary" id="createTicketBtn">إرسال</button><div id="ticketMsg" class="tiny"></div></div>');
+    $('[data-close]',els.panel).onclick=closeSheet;
+    $('#createTicketBtn',els.panel).onclick=async()=>{
+      const subject=$('#ticketSubject',els.panel).value.trim(),message=$('#ticketMessage',els.panel).value.trim(),orderId=$('#ticketOrder',els.panel).value||null,m=$('#ticketMsg',els.panel);
+      const {data,error}=await sb.rpc('create_support_ticket',{p_subject:subject,p_message:message,p_order_id:orderId});
+      if(error){m.textContent=error.message;m.className='danger';return}
+      toast('تم إرسال التذكرة');openTicket(data);
+    };
+  }
+
+  async function openTicket(ticketId){
+    const [{data:ticket,error:tErr},{data:messages,error:mErr}]=await Promise.all([
+      sb.from('support_tickets').select('*').eq('id',ticketId).single(),
+      sb.from('support_messages').select('id,sender_user_id,message,is_staff,created_at').eq('ticket_id',ticketId).order('created_at')
+    ]);
+    if(tErr||mErr){toast('تعذر فتح التذكرة');return}
+    openSheet('<div class="sheethead"><div><div class="tiny">'+supportStatus(ticket.status)+'</div><h2 style="margin:2px 0">'+esc(ticket.subject)+'</h2></div><button class="close" data-close>×</button></div><div>'+
+      (messages||[]).map(m=>'<div class="summary" style="margin-right:'+(m.is_staff?'0':'18px')+'"><div class="tiny">'+(m.is_staff?'دعم مَخْرَج':'أنت')+' · '+new Date(m.created_at).toLocaleString('ar-US')+'</div><div>'+esc(m.message)+'</div></div>').join('')+
+      '</div>'+(ticket.status!=='closed'&&ticket.status!=='resolved'?'<div class="formgrid"><textarea class="field" id="replyMessage" rows="3" placeholder="اكتب ردك"></textarea><button class="primary" id="sendReply">إرسال الرد</button><div id="replyMsg" class="tiny"></div></div>':'<div class="notice">هذه التذكرة مغلقة.</div>');
+    $('[data-close]',els.panel).onclick=closeSheet;
+    const btn=$('#sendReply',els.panel);if(btn)btn.onclick=async()=>{
+      const text=$('#replyMessage',els.panel).value.trim(),m=$('#replyMsg',els.panel);if(!text){m.textContent='اكتب رسالة أولًا.';return}
+      const {error}=await sb.from('support_messages').insert({ticket_id:ticketId,sender_user_id:state.session.user.id,message:text,is_staff:false});
+      if(error){m.textContent=error.message;m.className='danger';return}
+      openTicket(ticketId);
+    };
+  }
+
+  function supportStatus(s){return({open:'مفتوحة',waiting_customer:'بانتظارك',in_progress:'قيد المعالجة',resolved:'تم الحل',closed:'مغلقة'})[s]||s}
 
   async function renderNotifications(){
     const area=$('#accountExtra'); if(!area)return;
