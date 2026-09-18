@@ -74,7 +74,7 @@
     await loadStats();
   }
   function showTab(tab){
-    ['products','orders','categories','inventory','coupons','returns','reviews','support','audit','settings'].forEach(t=>$('#'+t+'Tab').classList.toggle('hidden',t!==tab));
+    ['products','orders','categories','inventory','coupons','returns','reviews','support','audit','brain','settings'].forEach(t=>$('#'+t+'Tab').classList.toggle('hidden',t!==tab));
     $$('.side button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   }
 
