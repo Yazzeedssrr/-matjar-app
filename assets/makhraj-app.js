@@ -550,7 +550,7 @@
     if(tErr||mErr){toast('تعذر فتح التذكرة');return}
     openSheet('<div class="sheethead"><div><div class="tiny">'+supportStatus(ticket.status)+'</div><h2 style="margin:2px 0">'+esc(ticket.subject)+'</h2></div><button class="close" data-close>×</button></div><div>'+
       (messages||[]).map(m=>'<div class="summary" style="margin-right:'+(m.is_staff?'0':'18px')+'"><div class="tiny">'+(m.is_staff?'دعم مَخْرَج':'أنت')+' · '+new Date(m.created_at).toLocaleString('ar-US')+'</div><div>'+esc(m.message)+'</div></div>').join('')+
-      '</div>'+(ticket.status!=='closed'&&ticket.status!=='resolved'?'<div class="formgrid"><textarea class="field" id="replyMessage" rows="3" placeholder="اكتب ردك"></textarea><button class="primary" id="sendReply">إرسال الرد</button><div id="replyMsg" class="tiny"></div></div>':'<div class="notice">هذه التذكرة مغلقة.</div>');
+      '</div>'+(ticket.status!=='closed'&&ticket.status!=='resolved'?'<div class="formgrid"><textarea class="field" id="replyMessage" rows="3" placeholder="اكتب ردك"></textarea><button class="primary" id="sendReply">إرسال الرد</button><div id="replyMsg" class="tiny"></div></div>':'<div class="notice">هذه التذكرة مغلقة.</div>'));
     $('[data-close]',els.panel).onclick=closeSheet;
     const btn=$('#sendReply',els.panel);if(btn)btn.onclick=async()=>{
       const text=$('#replyMessage',els.panel).value.trim(),m=$('#replyMsg',els.panel);if(!text){m.textContent='اكتب رسالة أولًا.';return}
