@@ -108,7 +108,7 @@
   async function loadProducts(){
     els.grid.innerHTML='<div class="loading">جارٍ تحميل المنتجات الحقيقية…</div>';
     const {data,error}=await sb.from('products')
-      .select('id,name,slug,description,status,base_price,compare_at_price,featured,category_id,categories(name,slug),product_images(id,url,alt_text,sort_order),product_variants(id,sku,title,price,stock_quantity,low_stock_threshold,attributes,is_active)')
+      .select('id,name,slug,description,brand,tags,specifications,status,base_price,compare_at_price,featured,category_id,categories(name,slug),product_images(id,url,alt_text,sort_order),product_variants(id,sku,barcode,title,price,stock_quantity,low_stock_threshold,weight_grams,attributes,is_active)')
       .eq('status','active').order('featured',{ascending:false}).order('created_at',{ascending:false});
     if(error){ console.error(error); els.grid.innerHTML='<div class="error">تعذر تحميل المنتجات. جرّب التحديث.</div>'; return; }
     state.products=(data||[]).map(p=>({
@@ -173,7 +173,7 @@
     openSheet('<div class="sheethead"><div><div class="tiny">'+esc(p.categories?.name||'')+'</div><h2 style="margin:3px 0">'+esc(p.name)+'</h2></div><button class="close" data-close>×</button></div>'+
       gallery+
       '<div class="line" style="margin-top:14px"><div><span class="price" id="detailPrice">'+money(state.selectedVariant?.price ?? p.base_price)+'</span> '+(p.compare_at_price?'<span class="old">'+money(p.compare_at_price)+'</span>':'')+'</div><button class="iconbtn" data-fav="'+p.id+'">'+(state.favs.has(p.id)?'♥':'♡')+'</button></div>'+
-      '<p class="muted">'+esc(p.description||'سيظهر وصف المنتج هنا عند إضافته من لوحة الإدارة.')+'</p>'+
+      '<p class="muted">'+esc(p.description||'سيظهر وصف المنتج هنا عند إضافته من لوحة الإدارة.')+'</p>'+      ((p.tags||[]).length?'<div class="chips" style="margin-bottom:12px">'+p.tags.map(t=>'<span class="chip">'+esc(t)+'</span>').join('')+'</div>':'')+      (Object.keys(p.specifications||{}).length?'<div class="summary"><b>المواصفات</b>'+Object.entries(p.specifications||{}).map(([k,v])=>'<div class="line"><span class="muted">'+esc(k)+'</span><b>'+esc(v)+'</b></div>').join('')+'</div>':'')+
       '<div class="tiny">اختر الخيار المناسب</div><div class="variant-list" id="variantList">'+
       (variants.length?variants.map((v,i)=>'<button class="variant '+(i===0?'on':'')+'" data-variant="'+v.id+'">'+esc(v.title)+' · '+money(v.price??p.base_price)+' <span class="tiny">('+v.stock_quantity+')</span></button>').join(''):'<span class="danger">نفد المخزون</span>')+
       '</div><div class="line"><div class="qty"><button id="qtyMinus">−</button><b id="qtyValue">1</b><button id="qtyPlus">+</button></div><span class="tiny" id="stockText">'+(state.selectedVariant?'المتاح '+state.selectedVariant.stock_quantity:'')+'</span></div>'+
@@ -582,7 +582,7 @@
     if(!text){out.innerHTML='<div class="danger">اكتب ما تحتاجه أولًا.</div>';return;}
     const words=text.split(/\s+/).filter(w=>w.length>2);
     let ranked=state.products.map(p=>{
-      const stock=totalStock(p),price=minPrice(p),hay=(p.name+' '+(p.description||'')+' '+(p.categories?.name||'')).toLowerCase();
+      const stock=totalStock(p),price=minPrice(p),hay=(p.name+' '+(p.description||'')+' '+(p.categories?.name||'')+' '+(p.brand||'')+' '+(p.tags||[]).join(' ')+' '+Object.entries(p.specifications||{}).map(x=>x.join(' ')).join(' ')).toLowerCase();
       let score=stock>0?10:-100; words.forEach(w=>{if(hay.includes(w))score+=12;});
       if(/هدية|مناسبة|عزيز|زوج|زوجة/.test(text)&&/هدية|عطر|ساعة|اكسسوار|إكسسوار/.test(hay))score+=8;
       if(/رخيص|اوفر|أوفر|توفير|أقل/.test(text))score+=Math.max(0,30-price)/3;
