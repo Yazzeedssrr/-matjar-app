@@ -400,7 +400,7 @@
   async function loadOrders(){
     if(!state.session){els.ordersList.innerHTML='<div class="empty"><b>سجّل الدخول لرؤية طلباتك.</b><br><button class="primary" id="ordersLogin" style="margin-top:12px">تسجيل الدخول</button></div>';$('#ordersLogin').onclick=()=>openAuth();return;}
     els.ordersList.innerHTML='<div class="loading">جارٍ تحميل الطلبات…</div>';
-    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,payment_method,total,created_at,shipping_address,order_items(product_name,variant_title,quantity,unit_price,line_total),order_events(id,status,title,description,created_at)').order('created_at',{ascending:false});
+    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,payment_method,total,created_at,shipping_address,order_items(product_id,variant_id,product_name,variant_title,quantity,unit_price,line_total),order_events(id,status,title,description,created_at)').order('created_at',{ascending:false});
     if(error){els.ordersList.innerHTML='<div class="error">تعذر تحميل الطلبات.</div>';return;}
     if(!data?.length){els.ordersList.innerHTML='<div class="empty">لا توجد طلبات حتى الآن.</div>';return;}
     els.ordersList.innerHTML=data.map(o=>'<article class="card account-card orderrow" data-order="'+o.id+'"><div class="grow"><b>MK-'+String(o.order_number).padStart(6,'0')+'</b><div class="tiny">'+new Date(o.created_at).toLocaleString('ar-US')+'</div></div><span class="order-status">'+statusLabel(o.status)+'</span><span class="price">'+money(o.total)+'</span></article>').join('');
@@ -411,14 +411,41 @@
     const timeline=events.length
       ? '<div class="section"><h2>تتبع الطلب</h2></div>'+events.map(ev=>'<div class="summary"><b>'+esc(ev.title)+'</b><div class="tiny">'+new Date(ev.created_at).toLocaleString('ar-US')+'</div>'+(ev.description?'<div class="muted">'+esc(ev.description)+'</div>':'')+'</div>').join('')
       : '';
+    const canCancel=['pending','confirmed'].includes(o.status)&&['unpaid','failed'].includes(o.payment_status);
     openSheet('<div class="sheethead"><div><div class="tiny">تفاصيل الطلب</div><h2 style="margin:2px 0">MK-'+String(o.order_number).padStart(6,'0')+'</h2></div><button class="close" data-close>×</button></div>'+
       '<div class="summary"><div class="line"><span>الحالة</span><b>'+statusLabel(o.status)+'</b></div><div class="line"><span>طريقة الطلب</span><b>'+paymentMethodLabel(o.payment_method)+'</b></div><div class="line"><span>الدفع</span><b>'+paymentLabel(o.payment_status)+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(o.total)+'</span></div></div>'+
       (o.order_items||[]).map(i=>'<div class="cartrow"><div class="grow"><b>'+esc(i.product_name)+'</b><div class="tiny">'+esc(i.variant_title||'')+' × '+i.quantity+'</div></div><b>'+money(i.line_total)+'</b></div>').join('')+
+      '<button class="secondary" id="reorderBtn" style="width:100%;margin-top:10px">أعد هذا الطلب</button>'+
       timeline+
       '<div class="notice" style="margin-top:12px">عند ربط شركة الشحن سنضيف رقم التتبع والتحديثات الخارجية هنا تلقائيًا.</div>'+
+      (canCancel?'<button class="secondary danger" id="cancelOrderBtn" style="width:100%;margin-top:10px">إلغاء الطلب</button>':'')+
       (o.status==='delivered'?'<button class="secondary" id="returnBtn" style="width:100%;margin-top:10px">طلب إرجاع / استبدال</button>':''));
     $('[data-close]',els.panel).onclick=closeSheet;
+    $('#reorderBtn',els.panel).onclick=()=>reorder(o);
+    const cb=$('#cancelOrderBtn',els.panel);if(cb)cb.onclick=()=>cancelOrder(o.id);
     const rb=$('#returnBtn',els.panel); if(rb)rb.onclick=()=>returnRequest(o.id);
+  }
+
+  function reorder(o){
+    let added=0,skipped=0;
+    for(const item of o.order_items||[]){
+      const p=state.products.find(x=>x.id===item.product_id),v=p?.product_variants.find(x=>x.id===item.variant_id&&x.is_active&&x.stock_quantity>0);
+      if(!p||!v){skipped++;continue}
+      const existing=state.cart.find(x=>x.variantId===v.id),qty=Math.min(Number(item.quantity||1),Number(v.stock_quantity||0));
+      if(existing)existing.qty=Math.min(Number(v.stock_quantity||0),existing.qty+qty);
+      else state.cart.push({variantId:v.id,productId:p.id,productName:p.name,variantTitle:v.title,price:Number(v.price??p.base_price),qty,image:productImage(p)});
+      added++;
+    }
+    saveLocal();
+    if(added){toast(skipped?'أضفت المتاح وتجاوزت المنتجات غير المتوفرة':'تمت إضافة الطلب السابق إلى السلة');openCart()}
+    else toast('لا توجد منتجات متاحة من هذا الطلب الآن');
+  }
+
+  async function cancelOrder(orderId){
+    if(!confirm('هل تريد إلغاء الطلب وإعادة المنتجات إلى المخزون؟'))return;
+    const {error}=await sb.rpc('cancel_my_order',{p_order_id:orderId});
+    if(error){toast(error.message);return}
+    closeSheet();toast('تم إلغاء الطلب');await loadOrders();
   }
 
   function returnRequest(orderId){
