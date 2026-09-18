@@ -6,25 +6,15 @@
   <meta name="theme-color" content="#070a0d">
   <title>إدارة مَخْرَج</title>
   <link rel="stylesheet" href="assets/makhraj-admin.css">
+  <link rel="stylesheet" href="assets/makhraj-studio.css?v=1">
 </head>
 <body>
   <div id="authGate" class="authbox">
     <div class="brand"><div class="mark"></div><div><b>إدارة مَخْرَج</b><div class="tiny">لوحة المتجر الإنتاجية</div></div></div>
     <h1>دخول الإدارة</h1>
     <p class="muted">سجّل الدخول بحساب المدير. إذا كان هذا أول حساب لك، أنشئ حسابًا أولًا ثم فعّل حساب المالك.</p>
-    <div class="form">
-      <input id="loginEmail" class="field" type="email" placeholder="البريد الإلكتروني">
-      <input id="loginPassword" class="field" type="password" placeholder="كلمة المرور">
-      <div class="toolbar">
-        <button id="loginBtn" class="btn primary">تسجيل الدخول</button>
-        <button id="signupAdminBtn" class="btn">إنشاء حساب أولي</button>
-      </div>
-      <button id="claimOwnerBtn" class="btn" type="button">تفعيل حساب المالك الأول</button>
-      <div id="claimOwnerMsg" class="tiny"></div>
-      <div id="loginMsg" class="tiny"></div>
-    </div>
+    <div class="form"><input id="loginEmail" class="field" type="email" placeholder="البريد الإلكتروني"><input id="loginPassword" class="field" type="password" placeholder="كلمة المرور"><div class="toolbar"><button id="loginBtn" class="btn primary">تسجيل الدخول</button><button id="signupAdminBtn" class="btn">إنشاء حساب أولي</button></div><button id="claimOwnerBtn" class="btn" type="button">تفعيل حساب المالك الأول</button><div id="claimOwnerMsg" class="tiny"></div><div id="loginMsg" class="tiny"></div></div>
   </div>
-
   <div id="adminApp" class="wrap hidden">
     <header class="top"><div class="brand"><div class="mark"></div><div><b>مَخْرَج · الإدارة</b><div id="adminIdentity" class="tiny"></div></div></div><div class="toolbar"><a class="btn" href="app.html" target="_blank">فتح المتجر</a><button id="logoutBtn" class="btn">خروج</button></div></header>
     <section class="stats grid"><div class="stat"><span class="tiny">المنتجات</span><b id="statProducts">—</b></div><div class="stat"><span class="tiny">الطلبات</span><b id="statOrders">—</b></div><div class="stat"><span class="tiny">منخفض المخزون</span><b id="statLow">—</b></div><div class="stat"><span class="tiny">مبيعات مدفوعة</span><b id="statRevenue">—</b></div></section>
@@ -44,26 +34,6 @@
     </div>
   </div>
   <div class="modal" id="modal"><div class="modalbox" id="modalBox"></div></div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="assets/makhraj-config.js"></script>
-  <script src="assets/makhraj-admin.js"></script>
-  <script>
-  (()=>{
-    const btn=document.getElementById('claimOwnerBtn'), out=document.getElementById('claimOwnerMsg');
-    btn.addEventListener('click',async()=>{
-      btn.disabled=true;out.textContent='جارٍ التحقق وتفعيل المالك…';out.className='tiny';
-      try{
-        const cfg=window.MAKHRAJ_CONFIG;
-        const client=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});
-        const {data:{session}}=await client.auth.getSession();
-        if(!session){out.textContent='سجّل الدخول بالحساب الذي أنشأته أولًا، ثم اضغط هذا الزر.';out.className='tiny bad';btn.disabled=false;return}
-        const {error}=await client.rpc('claim_first_admin');
-        if(error)throw error;
-        out.textContent='تم تفعيل حساب المالك بنجاح. جارٍ فتح لوحة الإدارة…';out.className='tiny ok';
-        setTimeout(()=>location.reload(),700);
-      }catch(e){out.textContent=e.message==='an admin already exists'?'تم إنشاء حساب المالك مسبقًا. سجّل الدخول بحساب المدير.':'تعذر التفعيل: '+e.message;out.className='tiny bad';btn.disabled=false}
-    });
-  })();
-  </script>
-</body>
-</html>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="assets/makhraj-config.js"></script><script src="assets/makhraj-admin.js"></script><script src="assets/makhraj-studio.js?v=1"></script>
+  <script>(()=>{const btn=document.getElementById('claimOwnerBtn'),out=document.getElementById('claimOwnerMsg');btn.addEventListener('click',async()=>{btn.disabled=true;out.textContent='جارٍ التحقق وتفعيل المالك…';out.className='tiny';try{const cfg=window.MAKHRAJ_CONFIG;const client=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseKey,{auth:{persistSession:true,autoRefreshToken:true}});const {data:{session}}=await client.auth.getSession();if(!session){out.textContent='سجّل الدخول بالحساب الذي أنشأته أولًا، ثم اضغط هذا الزر.';out.className='tiny bad';btn.disabled=false;return}const {error}=await client.rpc('claim_first_admin');if(error)throw error;out.textContent='تم تفعيل حساب المالك بنجاح. جارٍ فتح لوحة الإدارة…';out.className='tiny ok';setTimeout(()=>location.reload(),700)}catch(e){out.textContent=e.message==='an admin already exists'?'تم إنشاء حساب المالك مسبقًا. سجّل الدخول بحساب المدير.':'تعذر التفعيل: '+e.message;out.className='tiny bad';btn.disabled=false}})})();</script>
+</body></html>
