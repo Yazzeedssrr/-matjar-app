@@ -78,7 +78,13 @@
       $('#paymentOrders',els.panel).onclick=()=>{closeSheet();showView('orders');};
       window.MakhrajLearning?.event?.('order_created',{terms:window.MakhrajLearning?.getTerms?.()||[],context:{order_id:orderId,payment:'stripe'}});
     }else if(payment==='cancelled'){
-      toast('تم إلغاء صفحة الدفع. لم يتم تحصيل أموال.');
+      if(orderId&&state.session){
+        const {error}=await sb.functions.invoke('cancel-stripe-checkout',{body:{order_id:orderId}});
+        toast(error?'أُلغي الدفع، وسيتم تحرير الحجز تلقائيًا.':'تم إلغاء الدفع وإعادة المخزون.');
+      }else{
+        toast('تم إلغاء صفحة الدفع. لم يتم تحصيل أموال.');
+      }
+      sessionStorage.removeItem('makhraj-pending-order');
     }
   }
 
@@ -477,7 +483,7 @@
       (o.status==='delivered'?'<button class="secondary" id="returnBtn" style="width:100%;margin-top:10px">طلب إرجاع / استبدال</button>':''));
     $('[data-close]',els.panel).onclick=closeSheet;
     $('#reorderBtn',els.panel).onclick=()=>reorder(o);
-    const cb=$('#cancelOrderBtn',els.panel);if(cb)cb.onclick=()=>cancelOrder(o.id);
+    const cb=$('#cancelOrderBtn',els.panel);if(cb)cb.onclick=()=>cancelOrder(o);
     const rb=$('#returnBtn',els.panel); if(rb)rb.onclick=()=>returnRequest(o.id);
   }
 
@@ -496,10 +502,15 @@
     else toast('لا توجد منتجات متاحة من هذا الطلب الآن');
   }
 
-  async function cancelOrder(orderId){
+  async function cancelOrder(order){
     if(!confirm('هل تريد إلغاء الطلب وإعادة المنتجات إلى المخزون؟'))return;
-    const {error}=await sb.rpc('cancel_my_order',{p_order_id:orderId});
-    if(error){toast(error.message);return}
+    if(order.payment_method==='online'){
+      const {error}=await sb.functions.invoke('cancel-stripe-checkout',{body:{order_id:order.id}});
+      if(error){toast('تعذر إلغاء جلسة الدفع الآن. حاول مجددًا.');return}
+    }else{
+      const {error}=await sb.rpc('cancel_my_order',{p_order_id:order.id});
+      if(error){toast(error.message);return}
+    }
     closeSheet();toast('تم إلغاء الطلب');await loadOrders();
   }
 
