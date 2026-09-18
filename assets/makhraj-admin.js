@@ -113,7 +113,7 @@
   }
 
   async function loadProducts(){
-    const {data,error}=await sb.from('products').select('*,categories(name),product_images(*),product_variants(*)').order('created_at',{ascending:false});
+    const {data,error}=await sb.from('products').select('*,categories(name),product_images(*),product_variants(*),product_costs(cost_price)').order('created_at',{ascending:false});
     if(error)return;
     state.products=(data||[]).map(p=>({...p,product_images:[...(p.product_images||[])].sort((a,b)=>a.sort_order-b.sort_order)}));
     renderProducts();
@@ -131,11 +131,12 @@
     return '<div class="variantrow card" data-variant-id="'+esc(v.id||'')+'"><input class="field vTitle" placeholder="اسم الخيار: أسود / M" value="'+esc(v.title||'افتراضي')+'"><input class="field vSku" placeholder="SKU" value="'+esc(v.sku||'')+'"><input class="field vPrice" type="number" step="0.01" placeholder="سعر خاص" value="'+esc(v.price??'')+'"><input class="field vStock" type="number" min="0" placeholder="المخزون" value="'+esc(v.stock_quantity??0)+'"><input class="field vColor" placeholder="اللون" value="'+esc(a.color||'')+'"><input class="field vSize" placeholder="المقاس" value="'+esc(a.size||'')+'"><button class="btn danger vRemove" type="button">حذف الخيار</button></div>';
   }
   function productModal(p=null){
+    const currentCost=Array.isArray(p?.product_costs)?p.product_costs[0]?.cost_price:p?.product_costs?.cost_price;
     openModal('<div class="sectionhead"><div><h2>'+(p?'إدارة المنتج':'منتج جديد')+'</h2><div class="tiny">كل ما تحفظه هنا يصبح جزءًا من قاعدة مَخْرَج الحقيقية</div></div><button class="btn" data-close>إغلاق</button></div>'+
       '<div class="form"><div class="cols2"><input class="field" id="pName" placeholder="اسم المنتج" value="'+esc(p?.name||'')+'"><input class="field" id="pSlug" placeholder="slug" value="'+esc(p?.slug||'')+'"></div>'+
       '<textarea class="field" id="pDesc" rows="4" placeholder="وصف المنتج">'+esc(p?.description||'')+'</textarea>'+
       '<div class="cols3"><select class="field" id="pCategory"><option value="">بدون قسم</option>'+state.categories.map(c=>'<option value="'+c.id+'" '+(p?.category_id===c.id?'selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select><select class="field" id="pStatus"><option value="draft" '+(p?.status==='draft'?'selected':'')+'>مسودة</option><option value="active" '+(p?.status==='active'?'selected':'')+'>منشور</option><option value="archived" '+(p?.status==='archived'?'selected':'')+'>مؤرشف</option></select><label class="card"><input id="pFeatured" type="checkbox" '+(p?.featured?'checked':'')+'> منتج مميز</label></div>'+
-      '<div class="cols3"><input class="field" id="pBase" type="number" step="0.01" min="0" placeholder="السعر الأساسي" value="'+esc(p?.base_price??'')+'"><input class="field" id="pCompare" type="number" step="0.01" min="0" placeholder="السعر قبل الخصم" value="'+esc(p?.compare_at_price??'')+'"><input class="field" id="pCost" type="number" step="0.01" min="0" placeholder="تكلفة الشراء (إدارية)" value="'+esc(p?.cost_price??'')+'"></div>'+
+      '<div class="cols3"><input class="field" id="pBase" type="number" step="0.01" min="0" placeholder="السعر الأساسي" value="'+esc(p?.base_price??'')+'"><input class="field" id="pCompare" type="number" step="0.01" min="0" placeholder="السعر قبل الخصم" value="'+esc(p?.compare_at_price??'')+'"><input class="field" id="pCost" type="number" step="0.01" min="0" placeholder="تكلفة الشراء (إدارية)" value="'+esc(currentCost??'')+'"></div>'+
       '<div class="row"><div><b>الخيارات والمخزون</b><div class="tiny">لكل لون/مقاس SKU ومخزون مستقل</div></div><button class="btn" id="addVariant" type="button">+ خيار</button></div><div id="variantRows" class="variants">'+((p?.product_variants?.length?p.product_variants:[{}]).map(variantRow).join(''))+'</div>'+
       '<div class="row"><div><b>صور المنتج</b><div class="tiny">JPG/PNG/WebP/AVIF حتى 5MB</div></div></div><div id="existingImages" class="images">'+(p?.product_images||[]).map(i=>'<div class="imgcard" data-image="'+i.id+'"><div class="thumb" style="background-image:url(\''+esc(i.url)+'\')"></div><button type="button" data-del-img="'+i.id+'">×</button></div>').join('')+'</div><input class="field" id="pImages" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple>'+
       '<button class="btn primary" id="saveProduct">'+(p?'حفظ التعديلات':'إنشاء المنتج')+'</button>'+(p?'<button class="btn danger" id="archiveProduct" type="button">أرشفة المنتج</button>':'')+'<div id="pMsg" class="tiny"></div></div>');
@@ -172,7 +173,8 @@
   async function saveProduct(existing){
     const m=$('#pMsg',modalBox),btn=$('#saveProduct',modalBox);
     const base=Number($('#pBase',modalBox).value);
-    const row={name:$('#pName',modalBox).value.trim(),slug:slugify($('#pSlug',modalBox).value||$('#pName',modalBox).value),description:$('#pDesc',modalBox).value.trim()||null,category_id:$('#pCategory',modalBox).value||null,status:$('#pStatus',modalBox).value,base_price:base,compare_at_price:$('#pCompare',modalBox).value?Number($('#pCompare',modalBox).value):null,cost_price:$('#pCost',modalBox).value?Number($('#pCost',modalBox).value):null,featured:$('#pFeatured',modalBox).checked};
+    const costValue=$('#pCost',modalBox).value?Number($('#pCost',modalBox).value):null;
+    const row={name:$('#pName',modalBox).value.trim(),slug:slugify($('#pSlug',modalBox).value||$('#pName',modalBox).value),description:$('#pDesc',modalBox).value.trim()||null,category_id:$('#pCategory',modalBox).value||null,status:$('#pStatus',modalBox).value,base_price:base,compare_at_price:$('#pCompare',modalBox).value?Number($('#pCompare',modalBox).value):null,featured:$('#pFeatured',modalBox).checked};
     if(!row.name||!row.slug||!Number.isFinite(base)||base<0){msg(m,'الاسم والسعر الصحيح مطلوبان.','bad');return}
     if(row.compare_at_price!==null&&row.compare_at_price<row.base_price){msg(m,'السعر قبل الخصم يجب ألا يكون أقل من السعر الحالي.','bad');return}
     btn.disabled=true;btn.textContent='جارٍ الحفظ…';
@@ -183,6 +185,7 @@
       }else{
         const {data,error}=await sb.from('products').insert(row).select('id').single();if(error)throw error;productId=data.id;
       }
+      const {error:costError}=await sb.from('product_costs').upsert({product_id:productId,cost_price:costValue},{onConflict:'product_id'});if(costError)throw costError;
       const variantEls=$$('#variantRows [data-variant-id]',modalBox);
       if(!variantEls.length)throw new Error('أضف خيارًا واحدًا على الأقل.');
       for(const vEl of variantEls){
@@ -207,7 +210,7 @@
   }
 
   async function loadOrders(){
-    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,total,created_at,shipping_address,notes,profiles(full_name,phone),order_items(product_name,variant_title,sku,quantity,unit_price,line_total)').order('created_at',{ascending:false}).limit(200);
+    const {data,error}=await sb.from('orders').select('id,order_number,status,payment_status,total,created_at,shipping_address,notes,order_items(product_name,variant_title,sku,quantity,unit_price,line_total)').order('created_at',{ascending:false}).limit(200);
     if(error)return;
     state.orders=data||[];renderOrders();
   }
@@ -215,7 +218,7 @@
     const el=$('#ordersTable');
     if(!state.orders.length){el.innerHTML='<div class="empty">لا توجد طلبات بعد.</div>';return}
     el.innerHTML='<table class="table"><thead><tr><th>الطلب</th><th>العميل</th><th>الحالة</th><th>الدفع</th><th>الإجمالي</th><th></th></tr></thead><tbody>'+
-      state.orders.map(o=>'<tr><td><b>MK-'+String(o.order_number).padStart(6,'0')+'</b><div class="tiny">'+new Date(o.created_at).toLocaleString('ar-US')+'</div></td><td>'+esc(o.profiles?.full_name||o.shipping_address?.recipient_name||'ضيف')+'<div class="tiny">'+esc(o.profiles?.phone||o.shipping_address?.phone||'')+'</div></td><td><span class="status">'+orderStatus(o.status)+'</span></td><td><span class="status">'+paymentStatus(o.payment_status)+'</span></td><td class="price">'+money(o.total)+'</td><td><button class="btn" data-order="'+o.id+'">فتح</button></td></tr>').join('')+'</tbody></table>';
+      state.orders.map(o=>'<tr><td><b>MK-'+String(o.order_number).padStart(6,'0')+'</b><div class="tiny">'+new Date(o.created_at).toLocaleString('ar-US')+'</div></td><td>'+esc(o.shipping_address?.recipient_name||'عميل')+'<div class="tiny">'+esc(o.shipping_address?.phone||'')+'</div></td><td><span class="status">'+orderStatus(o.status)+'</span></td><td><span class="status">'+paymentStatus(o.payment_status)+'</span></td><td class="price">'+money(o.total)+'</td><td><button class="btn" data-order="'+o.id+'">فتح</button></td></tr>').join('')+'</tbody></table>';
     $$('[data-order]',el).forEach(b=>b.onclick=()=>orderModal(state.orders.find(o=>o.id===b.dataset.order)));
   }
   function orderModal(o){
