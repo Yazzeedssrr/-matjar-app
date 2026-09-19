@@ -115,7 +115,21 @@
     'بريد الدعم': {en:'Support email',es:'Correo de soporte',fr:'E-mail du support',tr:'Destek e-postası'},
     'حفظ الإعدادات': {en:'Save settings',es:'Guardar ajustes',fr:'Enregistrer les paramètres',tr:'Ayarları kaydet'},
     'محادثات الدعم': {en:'Support conversations',es:'Conversaciones de soporte',fr:'Conversations de support',tr:'Destek konuşmaları'},
-    'رد على العميل': {en:'Reply to customer',es:'Responder al cliente',fr:'Répondre au client',tr:'Müşteriye yanıt ver'}
+    'رد على العميل': {en:'Reply to customer',es:'Responder al cliente',fr:'Répondre au client',tr:'Müşteriye yanıt ver'},
+    'الأفضل للعرض': {en:'Recommended',es:'Recomendados',fr:'Recommandés',tr:'Önerilen'},
+    'السعر: الأقل أولًا': {en:'Price: low to high',es:'Precio: menor a mayor',fr:'Prix : croissant',tr:'Fiyat: düşükten yükseğe'},
+    'السعر: الأعلى أولًا': {en:'Price: high to low',es:'Precio: mayor a menor',fr:'Prix : décroissant',tr:'Fiyat: yüksekten düşüğe'},
+    'الاسم': {en:'Name',es:'Nombre',fr:'Nom',tr:'Ad'},
+    'المتوفر فقط': {en:'In stock only',es:'Solo disponibles',fr:'En stock uniquement',tr:'Yalnızca stokta'},
+    'مشاركة المنتج': {en:'Share product',es:'Compartir producto',fr:'Partager le produit',tr:'Ürünü paylaş'},
+    '✓ السعر والمخزون يعاد التحقق منهما عند الطلب': {en:'✓ Price and stock are rechecked at checkout',es:'✓ El precio y el stock se verifican al pagar',fr:'✓ Le prix et le stock sont revérifiés au paiement',tr:'✓ Fiyat ve stok ödeme sırasında yeniden kontrol edilir'},
+    '✓ الدفع الإلكتروني عبر Stripe عند تفعيله': {en:'✓ Online payment via Stripe when enabled',es:'✓ Pago en línea con Stripe cuando esté habilitado',fr:'✓ Paiement en ligne via Stripe lorsqu’il est activé',tr:'✓ Etkinleştirildiğinde Stripe ile çevrimiçi ödeme'},
+    'الربح الإجمالي المقدر': {en:'Estimated gross profit',es:'Beneficio bruto estimado',fr:'Marge brute estimée',tr:'Tahmini brüt kâr'},
+    'تكلفة الشراء': {en:'Purchase cost',es:'Costo de compra',fr:'Coût d’achat',tr:'Satın alma maliyeti'},
+    'ربح متوقع للوحدة': {en:'Expected profit per unit',es:'Beneficio esperado por unidad',fr:'Bénéfice estimé par unité',tr:'Birim başına tahmini kâr'},
+    'قبل رسوم الدفع والشحن والضرائب': {en:'Before payment, shipping and tax costs',es:'Antes de pagos, envíos e impuestos',fr:'Avant frais de paiement, livraison et taxes',tr:'Ödeme, kargo ve vergi masrafları öncesi'},
+    'نسخ رابط المنتج': {en:'Copy product link',es:'Copiar enlace del producto',fr:'Copier le lien du produit',tr:'Ürün bağlantısını kopyala'},
+    'لم تُسجّل تكلفة الشراء بعد': {en:'Purchase cost not entered yet',es:'Costo de compra aún no registrado',fr:'Coût d’achat non renseigné',tr:'Satın alma maliyeti henüz girilmedi'}
   };
 
   const placeholders = {
@@ -127,7 +141,8 @@
     'عنوان المشكلة': {en:'Issue subject',es:'Asunto del problema',fr:'Objet du problème',tr:'Sorun başlığı'},
     'اشرح ما الذي تحتاج مساعدتنا فيه': {en:'Tell us what you need help with',es:'Cuéntanos en qué necesitas ayuda',fr:'Expliquez-nous votre besoin',tr:'Neye yardım gerektiğini anlatın'},
     'بحث بالاسم أو SKU أو القسم...': {en:'Search by name, SKU or category…',es:'Buscar por nombre, SKU o categoría…',fr:'Rechercher par nom, SKU ou catégorie…',tr:'Ad, SKU veya kategori ile ara…'},
-    'قسم جديد': {en:'New category',es:'Nueva categoría',fr:'Nouvelle catégorie',tr:'Yeni kategori'}
+    'قسم جديد': {en:'New category',es:'Nueva categoría',fr:'Nouvelle catégorie',tr:'Yeni kategori'},
+    'لا تظهر للزبون': {en:'Hidden from customers',es:'Oculto para clientes',fr:'Masqué aux clients',tr:'Müşterilerden gizli'}
   };
 
   const textOriginal = new WeakMap();
