@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#070a0d">
   <title>إدارة مَخْرَج</title>
-  <link rel="stylesheet" href="assets/makhraj-theme.css?v=20260919-i18n2">
-  <link rel="stylesheet" href="assets/makhraj-seller.css?v=20260919-i18n2">
+  <link rel="stylesheet" href="assets/makhraj-theme.css?v=20260919-revenue1">
+  <link rel="stylesheet" href="assets/makhraj-seller.css?v=20260919-revenue1">
 </head>
 <body>
   <main class="admin-shell">
@@ -44,6 +44,7 @@
       <section class="view active" id="view-overview">
         <div class="metric-grid">
           <div class="metric"><span>المبيعات المدفوعة</span><b id="mRevenue">$0.00</b></div>
+          <div class="metric profit-metric"><span>الربح الإجمالي المقدر</span><b id="mGrossProfit">—</b></div>
           <div class="metric"><span>الطلبات</span><b id="mOrders">0</b></div>
           <div class="metric"><span>المنتجات المنشورة</span><b id="mProducts">0</b></div>
           <div class="metric"><span>مخزون منخفض</span><b id="mLow">0</b></div>
@@ -67,6 +68,10 @@
             <div class="two">
               <label>السعر<input id="price" class="field" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="45"></label>
               <label>السعر قبل الخصم<input id="comparePrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="اختياري"></label>
+            </div>
+            <div class="two">
+              <label>تكلفة الشراء<input id="costPrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="لا تظهر للزبون"></label>
+              <div class="profit-preview"><span>ربح متوقع للوحدة</span><b id="unitProfitPreview">—</b><small>قبل رسوم الدفع والشحن والضرائب</small></div>
             </div>
             <div class="two">
               <label>الكمية<input id="stock" class="field" type="number" min="0" step="1" inputmode="numeric" value="1"></label>
@@ -172,8 +177,8 @@
 
   <div id="modal" class="modal" aria-hidden="true"><div id="modalCard" class="modal-card"></div></div>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="assets/makhraj-config.js?v=20260919-i18n2"></script>
-  <script src="assets/makhraj-i18n.js?v=20260919-i18n2"></script>
-  <script src="assets/makhraj-seller.js?v=20260919-i18n2"></script>
+  <script src="assets/makhraj-config.js?v=20260919-revenue1"></script>
+  <script src="assets/makhraj-i18n.js?v=20260919-revenue1"></script>
+  <script src="assets/makhraj-seller.js?v=20260919-revenue1"></script>
 </body>
 </html>
