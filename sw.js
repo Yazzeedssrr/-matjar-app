@@ -1,7 +1,7 @@
-const CACHE='makhraj-prod-v6-store3';
+const CACHE='makhraj-prod-v7-i18n1';
 const SHELL=[
   './app.html','./manifest.webmanifest','./assets/makhraj-theme.css','./assets/makhraj-app.css',
-  './assets/makhraj-config.js','./assets/makhraj-app.js','./assets/makhraj-need.js','./assets/makhraj-bundles.js'
+  './assets/makhraj-config.js','./assets/makhraj-i18n.js','./assets/makhraj-app.js','./assets/makhraj-need.js','./assets/makhraj-bundles.js'
 ];
 self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)))});
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
