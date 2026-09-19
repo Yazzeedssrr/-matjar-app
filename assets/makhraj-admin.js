@@ -40,19 +40,34 @@
     gate.classList.remove('hidden');app.classList.add('hidden');
     state.profile=null;
   }
+  function friendlyAuthError(error){
+    const text=String(error?.message||'حدث خطأ غير متوقع');
+    if(/Invalid login credentials/i.test(text))return 'البريد أو كلمة المرور غير صحيحة.';
+    if(/Email not confirmed/i.test(text))return 'حساب الإدارة موجود لكن البريد غير مؤكد. افتح رابط التأكيد ثم حاول مرة أخرى.';
+    if(/User already registered|already registered/i.test(text))return 'هذا البريد لديه حساب سابق. استخدم تسجيل الدخول بدل إنشاء حساب جديد.';
+    if(/Password should be|password/i.test(text))return 'كلمة المرور قصيرة أو غير مقبولة. استخدم 6 أحرف على الأقل.';
+    if(/rate limit|too many/i.test(text))return 'محاولات كثيرة خلال وقت قصير. انتظر قليلًا ثم جرّب مرة أخرى.';
+    return text;
+  }
+  function isValidEmail(email){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
   async function login(){
-    const email=$('#loginEmail').value.trim(),password=$('#loginPassword').value;
+    const email=$('#loginEmail').value.trim(),password=$('#loginPassword').value,btn=$('#loginBtn');
+    if(!isValidEmail(email)||!password){msg($('#loginMsg'),'اكتب بريدًا صحيحًا وكلمة المرور.','bad');return}
     msg($('#loginMsg'),'جارٍ تسجيل الدخول…');
+    btn.disabled=true;btn.textContent='جارٍ الدخول…';
     const {error}=await sb.auth.signInWithPassword({email,password});
-    if(error)msg($('#loginMsg'),error.message,'bad');
+    btn.disabled=false;btn.textContent='تسجيل الدخول';
+    if(error)msg($('#loginMsg'),friendlyAuthError(error),'bad');
   }
   async function signupInitial(){
-    const email=$('#loginEmail').value.trim(),password=$('#loginPassword').value;
-    if(!email||password.length<6){msg($('#loginMsg'),'اكتب بريدًا صحيحًا وكلمة مرور 6 أحرف على الأقل.','bad');return}
+    const email=$('#loginEmail').value.trim(),password=$('#loginPassword').value,btn=$('#signupAdminBtn');
+    if(!isValidEmail(email)||password.length<6){msg($('#loginMsg'),'اكتب بريدًا صحيحًا وكلمة مرور 6 أحرف على الأقل.','bad');return}
     msg($('#loginMsg'),'جارٍ إنشاء الحساب…');
+    btn.disabled=true;btn.textContent='جارٍ الإنشاء…';
     const {data,error}=await sb.auth.signUp({email,password,options:{data:{full_name:'مالك مَخْرَج'}}});
-    if(error){msg($('#loginMsg'),error.message,'bad');return}
-    if(!data.session){msg($('#loginMsg'),'تم إنشاء الحساب. أكّد البريد الإلكتروني أولًا ثم سجّل الدخول.','ok');return}
+    btn.disabled=false;btn.textContent='إنشاء حساب أولي';
+    if(error){msg($('#loginMsg'),friendlyAuthError(error),'bad');return}
+    if(!data.session){msg($('#loginMsg'),'تم إنشاء حساب الإدارة. أرسلنا رابط تأكيد إلى البريد. بعد فتح الرابط ارجع هنا وسجّل الدخول.','ok');return}
     state.session=data.session;await authorize();
   }
   async function authorize(){
