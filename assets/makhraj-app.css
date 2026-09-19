@@ -32,3 +32,9 @@ button,input,textarea,select{font:inherit;font-size:16px}button{cursor:pointer}.
 .category-heading{margin-top:20px}.category-showcase{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.category-tile{border:1px solid var(--line);background:linear-gradient(145deg,#151d25,#0b1015);color:#fff;border-radius:20px;padding:16px;text-align:right;min-height:92px;display:flex;flex-direction:column;justify-content:space-between;box-shadow:0 8px 26px rgba(0,0,0,.16)}.category-tile b{font-size:16px}.category-tile span{font-size:11px;color:var(--muted)}.category-tile .arrow{align-self:flex-end;color:var(--gold);font-size:18px}
 .need-hero{margin-top:24px}.need-hero>.tiny:after{content:" · مساعد التسوق"}
 @media(max-width:520px){.store-hero{grid-template-columns:1fr;padding:24px 18px}.store-hero-mark{display:none}.store-hero h1{font-size:31px}.trust-strip{grid-template-columns:1fr 1fr 1fr}.trust-strip>div{padding:10px 6px}.category-showcase{grid-template-columns:1fr 1fr}}
+
+.top-actions{display:flex;gap:7px;align-items:center}.lang-switch{border:1px solid var(--line);background:#111820;color:#fff;border-radius:999px;padding:10px 9px;max-width:112px;font-size:12px}
+.support-message{position:relative}.support-message.customer{margin-inline-start:18px}.support-message.staff{border-color:rgba(245,217,139,.22)}
+.translation-box{margin-top:9px;padding-top:8px;border-top:1px dashed rgba(255,255,255,.11)}.translation-label{font-size:10px;color:var(--gold);font-weight:800;margin-bottom:4px}.translated-message{line-height:1.65;color:#eef2f5}.translation-error{font-size:11px;color:var(--muted)}
+html[dir="ltr"] .app,html[dir="ltr"] .panel{text-align:left}html[dir="ltr"] .section,html[dir="ltr"] .line,html[dir="ltr"] .topbar{direction:ltr}html[dir="ltr"] .fav{left:auto;right:9px}
+@media(max-width:430px){.lang-switch{max-width:82px;padding-inline:7px}.top-actions{gap:5px}.top-actions .pillbtn{padding-inline:9px}}
