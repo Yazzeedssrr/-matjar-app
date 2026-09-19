@@ -1,4 +1,4 @@
-const CACHE='makhraj-prod-v8-i18n2';
+const CACHE='makhraj-prod-v9-revenue1';
 const SHELL=[
   './app.html','./manifest.webmanifest','./assets/makhraj-theme.css','./assets/makhraj-app.css',
   './assets/makhraj-config.js','./assets/makhraj-i18n.js','./assets/makhraj-app.js','./assets/makhraj-need.js','./assets/makhraj-bundles.js'
