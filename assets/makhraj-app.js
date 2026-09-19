@@ -554,13 +554,14 @@
       els.accountContent.innerHTML='<div class="card account-card"><h3>حساب مَخْرَج</h3><p class="muted">احفظ طلباتك وعناوينك ومفضلاتك على حسابك.</p><button class="primary" id="accLogin">تسجيل الدخول</button> <button class="secondary" id="accSignup">إنشاء حساب</button></div>';
       $('#accLogin').onclick=()=>openAuth('login');$('#accSignup').onclick=()=>openAuth('signup');return;
     }
-    els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accProfile">بياناتي</button><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accAddresses">عناويني</button><button class="secondary" id="accNotifications">الإشعارات</button><button class="secondary" id="accSupport">الدعم</button><button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div><div id="accountExtra"></div>';
+    els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accProfile">بياناتي</button><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accAddresses">عناويني</button><button class="secondary" id="accNotifications">الإشعارات</button><button class="secondary" id="accSupport">الدعم</button>'+(state.profile?.role==='admin'?'<button class="primary" id="accSeller">لوحة البائع</button>':'')+'<button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div><div id="accountExtra"></div>';
     $('#accProfile').onclick=profileModal;
     $('#accOrders').onclick=()=>showView('orders');
     $('#accFavs').onclick=()=>renderFavArea();
     $('#accAddresses').onclick=()=>renderAddresses();
     $('#accNotifications').onclick=()=>renderNotifications();
     $('#accSupport').onclick=()=>renderSupport();
+    const adminBtn=$('#accSeller'); if(adminBtn) adminBtn.onclick=()=>{location.href='seller.html';};
     $('#accLogout').onclick=async()=>{await sb.auth.signOut();state.session=null;state.profile=null;toast('تم تسجيل الخروج');renderAccount();};
   }
 
