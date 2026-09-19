@@ -1,4 +1,4 @@
-const CACHE='makhraj-prod-v5-auth';
+const CACHE='makhraj-prod-v6-store3';
 const SHELL=[
   './app.html','./manifest.webmanifest','./assets/makhraj-theme.css','./assets/makhraj-app.css',
   './assets/makhraj-config.js','./assets/makhraj-app.js','./assets/makhraj-need.js','./assets/makhraj-bundles.js'
