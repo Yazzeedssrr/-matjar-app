@@ -6,7 +6,7 @@ const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelect
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n||0));
 const slugify=s=>String(s||'').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'');
-const state={session:null,profile:null,categories:[],products:[],orders:[],customers:[],coupons:[],settings:null,files:[],editing:null};
+const state={session:null,profile:null,categories:[],products:[],orders:[],customers:[],coupons:[],tickets:[],settings:null,files:[],editing:null,activeTicket:null};
 
 function showGate(html){$('#adminApp').classList.add('hidden');$('#gate').classList.remove('hidden');$('#gateBody').innerHTML=html}
 function showApp(){$('#gate').classList.add('hidden');$('#adminApp').classList.remove('hidden')}
@@ -27,7 +27,9 @@ function renderLogin(){
 async function enter(){
  const {data,error}=await sb.from('profiles').select('*').eq('id',state.session.user.id).maybeSingle();
  if(error||!data||data.role!=='admin'){showGate('<div class="danger">هذا الحساب لا يملك صلاحية الإدارة.</div><button id="badLogout" class="secondary">تسجيل الخروج</button>');$('#badLogout').onclick=logout;return}
- state.profile=data;showApp();bind();await loadAll();switchTab('overview');
+ state.profile=data;
+ if(state.profile?.preferred_language && !localStorage.getItem('makhraj-language')) window.MakhrajI18n?.setLanguage(state.profile.preferred_language);
+ showApp();bind();await loadAll();switchTab('overview');
 }
 async function logout(){await sb.auth.signOut();state.session=null;renderLogin()}
 
@@ -38,6 +40,14 @@ function bind(){
  $('#refreshProducts').onclick=loadProducts;
  $('#refreshOrders').onclick=loadOrders;
  $('#refreshCustomers').onclick=loadCustomers;
+ const refreshSupport=$('#refreshSupport'); if(refreshSupport) refreshSupport.onclick=loadSupport;
+ document.addEventListener('makhraj:languagechange',async e=>{
+   const language=e.detail?.language;
+   if(state.session&&language){
+     await sb.from('profiles').update({preferred_language:language}).eq('id',state.session.user.id);
+     if(state.activeTicket) openAdminTicket(state.activeTicket);
+   }
+ });
  $('#resetProductBtn').onclick=resetProductForm;
  $('#saveDraftBtn').onclick=()=>saveProduct('draft');
  $('#publishBtn').onclick=()=>saveProduct('active');
@@ -55,10 +65,11 @@ function switchTab(name){
  if(name==='products')Promise.all([loadCategories(),loadProducts()]);
  if(name==='orders')loadOrders();
  if(name==='customers')loadCustomers();
+ if(name==='messages')loadSupport();
  if(name==='promos')loadCoupons();
  if(name==='settings')loadSettings();
 }
-async function loadAll(){await Promise.all([loadCategories(),loadProducts(),loadOrders(),loadCustomers(),loadCoupons(),loadSettings()])}
+async function loadAll(){await Promise.all([loadCategories(),loadProducts(),loadOrders(),loadCustomers(),loadSupport(),loadCoupons(),loadSettings()])}
 
 async function loadOverview(){
  await Promise.all([loadProducts(),loadOrders()]);
@@ -143,6 +154,68 @@ async function toggleCoupon(id){const c=state.coupons.find(x=>x.id===id);if(!c)r
 
 async function loadSettings(){const {data,error}=await sb.from('store_settings').select('*').eq('id',1).single();if(error)return;state.settings=data;$('#storeName').value=data.store_name||'';$('#shippingFee').value=data.standard_shipping_fee??0;$('#freeShipping').value=data.free_shipping_threshold??0;$('#supportEmail').value=data.support_email||'';$('#checkoutEnabled').checked=!!data.checkout_enabled;$('#stripeEnabled').checked=!!data.stripe_online_enabled;$('#codEnabled').checked=!!data.cash_on_delivery_enabled}
 async function saveSettings(){const row={store_name:$('#storeName').value.trim()||'MAKHRAJ',standard_shipping_fee:Number($('#shippingFee').value||0),free_shipping_threshold:Number($('#freeShipping').value||0),support_email:$('#supportEmail').value.trim()||null,checkout_enabled:$('#checkoutEnabled').checked,stripe_online_enabled:$('#stripeEnabled').checked,cash_on_delivery_enabled:$('#codEnabled').checked,updated_at:new Date().toISOString()};const {error}=await sb.from('store_settings').update(row).eq('id',1);if(error){msg('#settingsMsg',error.message,'err');return}msg('#settingsMsg','تم حفظ الإعدادات.','ok');await loadSettings();await loadOverview()}
+
+
+async function loadSupport(){
+ const box=$('#supportInbox'); if(!box)return;
+ box.innerHTML='<div class="muted">جارٍ تحميل المحادثات…</div>';
+ const {data,error}=await sb.from('support_tickets')
+   .select('id,user_id,order_id,subject,status,priority,created_at,updated_at,profiles:user_id(full_name,phone)')
+   .order('updated_at',{ascending:false})
+   .limit(100);
+ if(error){box.innerHTML='<div class="danger">'+esc(error.message)+'</div>';return}
+ state.tickets=data||[];
+ box.innerHTML=state.tickets.length?state.tickets.map(t=>{
+   const name=t.profiles?.full_name||'عميل';
+   const badge=t.status==='waiting_customer'?'<span class="badge warn">بانتظار العميل</span>':t.status==='resolved'||t.status==='closed'?'<span class="badge good">'+esc(t.status)+'</span>':'<span class="badge">'+esc(t.status)+'</span>';
+   return '<button class="support-row card-row" data-support="'+t.id+'"><div class="row-head"><div><div class="row-title">'+esc(t.subject)+'</div><div class="meta">'+esc(name)+' · '+new Date(t.updated_at).toLocaleString()+'</div></div>'+badge+'</div></button>';
+ }).join(''):'<div class="empty">لا توجد محادثات دعم بعد.</div>';
+ $('[data-support]',box).forEach(b=>b.onclick=()=>openAdminTicket(b.dataset.support));
+}
+
+async function openAdminTicket(ticketId){
+ state.activeTicket=ticketId;
+ const [{data:ticket,error:tErr},{data:messages,error:mErr}]=await Promise.all([
+   sb.from('support_tickets').select('*,profiles:user_id(full_name,phone)').eq('id',ticketId).single(),
+   sb.from('support_messages').select('id,sender_user_id,message,is_staff,source_language,created_at').eq('ticket_id',ticketId).order('created_at')
+ ]);
+ if(tErr||mErr){alert('تعذر فتح المحادثة');return}
+ const target=window.MakhrajI18n?.language||'ar';
+ openModal('<div class="modal-title"><div><div class="eyebrow">SUPPORT</div><h2>'+esc(ticket.subject)+'</h2><div class="meta">'+esc(ticket.profiles?.full_name||'عميل')+' · ترجمة تلقائية '+esc(target.toUpperCase())+'</div></div><button class="close" data-close>×</button></div>'+
+   '<div class="support-thread">'+(messages||[]).map(m=>'<div class="chat-bubble '+(m.is_staff?'staff':'customer')+'"><div class="meta">'+(m.is_staff?'دعم مَخْرَج':'العميل')+' · '+new Date(m.created_at).toLocaleString()+'</div><div class="chat-original">'+esc(m.message)+'</div><div data-admin-translation="'+m.id+'" class="chat-translation"></div></div>').join('')+'</div>'+
+   '<div class="stack support-compose"><label>حالة التذكرة<select id="ticketStatusAdmin" class="field">'+['open','in_progress','waiting_customer','resolved','closed'].map(s=>'<option value="'+s+'" '+(ticket.status===s?'selected':'')+'>'+s+'</option>').join('')+'</select></label>'+
+   '<textarea id="adminReply" class="field" rows="3" placeholder="رد على العميل"></textarea><div class="two"><button id="saveTicketStatus" class="secondary">حفظ الحالة</button><button id="sendAdminReply" class="primary">إرسال الرد</button></div><div id="adminReplyMsg" class="msg"></div></div>');
+ (messages||[]).forEach(m=>translateAdminMessage(m,target));
+ $('#saveTicketStatus').onclick=async()=>{
+   const {error}=await sb.from('support_tickets').update({status:$('#ticketStatusAdmin').value,updated_at:new Date().toISOString()}).eq('id',ticketId);
+   if(error){msg('#adminReplyMsg',error.message,'err');return}
+   msg('#adminReplyMsg','تم حفظ الحالة.','ok');await loadSupport();
+ };
+ $('#sendAdminReply').onclick=async()=>{
+   const text=$('#adminReply').value.trim(); if(!text){msg('#adminReplyMsg','اكتب ردًا أولًا.','err');return}
+   const {error}=await sb.from('support_messages').insert({
+     ticket_id:ticketId,
+     sender_user_id:state.session.user.id,
+     message:text,
+     is_staff:true,
+     source_language:window.MakhrajI18n?.language||'auto'
+   });
+   if(error){msg('#adminReplyMsg',error.message,'err');return}
+   await loadSupport(); openAdminTicket(ticketId);
+ };
+}
+
+async function translateAdminMessage(message,target){
+ const box=$('[data-admin-translation="'+message.id+'"]',$('#modalCard')); if(!box)return;
+ if(message.source_language===target){box.innerHTML='';return}
+ box.innerHTML='<div class="translation-label">جارٍ الترجمة…</div>';
+ const {data,error}=await sb.functions.invoke('translate-message',{body:{message_id:message.id,target_language:target}});
+ if(!box.isConnected)return;
+ if(error||!data?.translated_text){box.innerHTML='<div class="translation-error">تعذر الترجمة الآن</div>';return}
+ if(String(data.translated_text).trim()===String(message.message).trim()){box.innerHTML='';return}
+ box.innerHTML='<div class="translation-label">الترجمة</div><div>'+esc(data.translated_text)+'</div>';
+ window.MakhrajI18n?.apply(box);
+}
 
 init().catch(e=>{console.error(e);showGate('<div class="danger">تعذر تشغيل لوحة الإدارة.</div>')});
 })();
