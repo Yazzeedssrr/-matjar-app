@@ -398,25 +398,46 @@
   function renderAuthBody(mode){
     $('#loginTab',els.panel).classList.toggle('on',mode==='login');$('#signupTab',els.panel).classList.toggle('on',mode==='signup');
     $('#authBody',els.panel).innerHTML=mode==='login'
-      ?'<div class="formgrid"><input class="field" id="authEmail" type="email" autocomplete="email" placeholder="البريد الإلكتروني"><input class="field" id="authPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"><button class="primary" id="authSubmit">تسجيل الدخول</button><button class="secondary" id="forgotBtn">نسيت كلمة المرور</button><div id="authMsg" class="tiny"></div></div>'
-      :'<div class="formgrid"><input class="field" id="authName" placeholder="الاسم الكامل"><input class="field" id="authEmail" type="email" autocomplete="email" placeholder="البريد الإلكتروني"><input class="field" id="authPass" type="password" autocomplete="new-password" placeholder="كلمة المرور (6 أحرف على الأقل)"><button class="primary" id="authSubmit">إنشاء الحساب</button><div id="authMsg" class="tiny"></div></div>';
+      ?'<div class="formgrid"><input class="field" id="authEmail" type="email" inputmode="email" autocomplete="email" placeholder="البريد الإلكتروني"><input class="field" id="authPass" type="password" autocomplete="current-password" placeholder="كلمة المرور"><button class="primary" id="authSubmit">تسجيل الدخول</button><button class="secondary" id="forgotBtn">نسيت كلمة المرور</button><div id="authMsg" class="tiny" aria-live="polite"></div><div class="auth-hint">الدخول هنا بحساب مَخْرَج المسجّل في التطبيق، وليس بحساب ChatGPT.</div></div>'
+      :'<div class="formgrid"><input class="field" id="authName" autocomplete="name" placeholder="الاسم الكامل"><input class="field" id="authEmail" type="email" inputmode="email" autocomplete="email" placeholder="البريد الإلكتروني"><input class="field" id="authPass" type="password" autocomplete="new-password" placeholder="كلمة المرور (6 أحرف على الأقل)"><button class="primary" id="authSubmit">إنشاء الحساب</button><div id="authMsg" class="tiny" aria-live="polite"></div><div class="auth-hint">بعد إنشاء الحساب قد يرسل النظام رابط تأكيد إلى بريدك. أبقِ هذه النافذة مفتوحة حتى ترى النتيجة.</div></div>';
     $('#authSubmit',els.panel).onclick=()=>mode==='login'?login():signup();
     const f=$('#forgotBtn',els.panel);if(f)f.onclick=forgotPassword;
   }
+  function friendlyAuthError(error){
+    const text=String(error?.message||'حدث خطأ غير متوقع');
+    if(/Invalid login credentials/i.test(text))return 'البريد أو كلمة المرور غير صحيحة.';
+    if(/Email not confirmed/i.test(text))return 'حسابك موجود لكن البريد غير مؤكد. افتح رابط التأكيد في بريدك ثم حاول مرة أخرى.';
+    if(/User already registered|already registered/i.test(text))return 'هذا البريد لديه حساب سابق. استخدم تسجيل الدخول أو استعادة كلمة المرور.';
+    if(/Password should be|password/i.test(text))return 'كلمة المرور قصيرة أو غير مقبولة. استخدم 6 أحرف على الأقل.';
+    if(/rate limit|too many/i.test(text))return 'محاولات كثيرة خلال وقت قصير. انتظر قليلًا ثم جرّب مرة أخرى.';
+    return text;
+  }
+  function isValidEmail(email){return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)}
   async function login(){
-    const msg=$('#authMsg',els.panel),email=$('#authEmail',els.panel).value.trim(),password=$('#authPass',els.panel).value;
+    const msg=$('#authMsg',els.panel),btn=$('#authSubmit',els.panel),email=$('#authEmail',els.panel).value.trim(),password=$('#authPass',els.panel).value;
+    if(!isValidEmail(email)||!password){msg.textContent='اكتب بريدًا صحيحًا وكلمة المرور.';msg.className='danger';return;}
     msg.textContent='جارٍ تسجيل الدخول…';
+    msg.className='tiny';btn.disabled=true;btn.textContent='جارٍ الدخول…';
     const {error}=await sb.auth.signInWithPassword({email,password});
-    if(error){msg.textContent=error.message;msg.className='danger';return;}
+    btn.disabled=false;btn.textContent='تسجيل الدخول';
+    if(error){msg.textContent=friendlyAuthError(error);msg.className='danger';return;}
     await afterAuth();closeSheet();toast('أهلًا بك');render();
   }
   async function signup(){
-    const msg=$('#authMsg',els.panel),full_name=$('#authName',els.panel).value.trim(),email=$('#authEmail',els.panel).value.trim(),password=$('#authPass',els.panel).value;
+    const msg=$('#authMsg',els.panel),btn=$('#authSubmit',els.panel),full_name=$('#authName',els.panel).value.trim(),email=$('#authEmail',els.panel).value.trim(),password=$('#authPass',els.panel).value;
     if(!full_name){msg.textContent='اكتب الاسم.';msg.className='danger';return;}
+    if(!isValidEmail(email)){msg.textContent='اكتب بريدًا إلكترونيًا صحيحًا.';msg.className='danger';return;}
+    if(password.length<6){msg.textContent='كلمة المرور يجب أن تكون 6 أحرف على الأقل.';msg.className='danger';return;}
     msg.textContent='جارٍ إنشاء الحساب…';
+    msg.className='tiny';btn.disabled=true;btn.textContent='جارٍ الإنشاء…';
     const {data,error}=await sb.auth.signUp({email,password,options:{data:{full_name}}});
-    if(error){msg.textContent=error.message;msg.className='danger';return;}
-    if(!data.session){msg.textContent='تم إنشاء الحساب. افتح رسالة التأكيد في بريدك ثم سجّل الدخول.';msg.className='ok';return;}
+    btn.disabled=false;btn.textContent='إنشاء الحساب';
+    if(error){msg.textContent=friendlyAuthError(error);msg.className='danger';return;}
+    if(!data.session){
+      $('#authBody',els.panel).innerHTML='<div class="auth-success"><b>تم إنشاء الحساب.</b><br>أرسلنا رابط تأكيد إلى بريدك الإلكتروني. افتح الرابط من نفس الجهاز إن أمكن، ثم ارجع إلى مَخْرَج وسجّل الدخول.</div><button class="primary" id="backToLogin" style="width:100%;margin-top:10px">الانتقال لتسجيل الدخول</button>';
+      $('#backToLogin',els.panel).onclick=()=>renderAuthBody('login');
+      return;
+    }
     state.session=data.session;await afterAuth();closeSheet();toast('تم إنشاء حسابك');render();
   }
   async function forgotPassword(){
