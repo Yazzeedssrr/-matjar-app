@@ -65,7 +65,7 @@
     const {data,error}=await sb.from('categories').select('id,name,slug').order('sort_order');
     if(error)return;
     state.categories=data||[];
-    const preferred=state.categories.find(c=>c.slug==='honda-accord-parts');
+    const preferred=state.categories.find(c=>c.slug==='auto-parts');
     $('#category').innerHTML=state.categories.map(c=>'<option value="'+c.id+'" '+(preferred&&c.id===preferred.id?'selected':'')+'>'+esc(c.name)+'</option>').join('');
   }
 
@@ -145,7 +145,7 @@
       const {data:product,error:e1}=await sb.from('products').insert({
         category_id:categoryId,name:name,slug:slug,description:description||null,status:status,
         base_price:price,featured:false,brand:'Honda',tags:tags,specifications:specs,
-        need_tags:['قطع هوندا أكورد','قطع سيارة'],
+        need_tags:['قطع سيارات','قطع سيارة'],
         situations:['استبدال قطعة','صيانة سيارة'],
         benefit_summary:'قطعة متوفرة فعليًا من مخزون البائع',
         ideal_for:years?('Honda Accord '+years):'Honda Accord'
