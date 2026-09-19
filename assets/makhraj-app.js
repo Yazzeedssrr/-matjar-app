@@ -103,13 +103,22 @@
     });
     sb.auth.onAuthStateChange(async (_event,session)=>{
       state.session=session;
-      if(session) await afterAuth(); else { state.profile=null; state.favs=new Set(safeJson('makhraj-favs-prod',[])); }
+      if(session) await afterAuth(); else {
+        state.profile=null;
+        state.favs=new Set(safeJson('makhraj-favs-prod',[]));
+        const adminTop=$('#adminTopBtn'); if(adminTop) adminTop.classList.add('hidden');
+      }
       renderAccount();
     });
   }
 
   async function afterAuth(){
     await loadProfile();
+    const adminTop=$('#adminTopBtn');
+    if(adminTop){
+      adminTop.classList.toggle('hidden', state.profile?.role!=='admin');
+      adminTop.onclick=()=>{ location.href='seller.html'; };
+    }
     await syncLocalFavorites();
     await loadFavorites();
   }
