@@ -160,28 +160,36 @@ async function loadSupport(){
  const box=$('#supportInbox'); if(!box)return;
  box.innerHTML='<div class="muted">جارٍ تحميل المحادثات…</div>';
  const {data,error}=await sb.from('support_tickets')
-   .select('id,user_id,order_id,subject,status,priority,created_at,updated_at,profiles:user_id(full_name,phone)')
+   .select('id,user_id,order_id,subject,status,priority,created_at,updated_at')
    .order('updated_at',{ascending:false})
    .limit(100);
  if(error){box.innerHTML='<div class="danger">'+esc(error.message)+'</div>';return}
- state.tickets=data||[];
+ const tickets=data||[];
+ const ids=[...new Set(tickets.map(t=>t.user_id).filter(Boolean))];
+ let profileMap={};
+ if(ids.length){
+   const {data:profiles}=await sb.from('profiles').select('id,full_name,phone').in('id',ids);
+   profileMap=Object.fromEntries((profiles||[]).map(p=>[p.id,p]));
+ }
+ state.tickets=tickets.map(t=>({...t,customer:profileMap[t.user_id]||null}));
  box.innerHTML=state.tickets.length?state.tickets.map(t=>{
-   const name=t.profiles?.full_name||'عميل';
+   const name=t.customer?.full_name||'عميل';
    const badge=t.status==='waiting_customer'?'<span class="badge warn">بانتظار العميل</span>':t.status==='resolved'||t.status==='closed'?'<span class="badge good">'+esc(t.status)+'</span>':'<span class="badge">'+esc(t.status)+'</span>';
    return '<button class="support-row card-row" data-support="'+t.id+'"><div class="row-head"><div><div class="row-title">'+esc(t.subject)+'</div><div class="meta">'+esc(name)+' · '+new Date(t.updated_at).toLocaleString()+'</div></div>'+badge+'</div></button>';
  }).join(''):'<div class="empty">لا توجد محادثات دعم بعد.</div>';
- $('[data-support]',box).forEach(b=>b.onclick=()=>openAdminTicket(b.dataset.support));
+ $$('[data-support]',box).forEach(btn=>btn.onclick=()=>openAdminTicket(btn.dataset.support));
 }
 
 async function openAdminTicket(ticketId){
  state.activeTicket=ticketId;
  const [{data:ticket,error:tErr},{data:messages,error:mErr}]=await Promise.all([
-   sb.from('support_tickets').select('*,profiles:user_id(full_name,phone)').eq('id',ticketId).single(),
+   sb.from('support_tickets').select('*').eq('id',ticketId).single(),
    sb.from('support_messages').select('id,sender_user_id,message,is_staff,source_language,created_at').eq('ticket_id',ticketId).order('created_at')
  ]);
  if(tErr||mErr){alert('تعذر فتح المحادثة');return}
+ const {data:customer}=await sb.from('profiles').select('id,full_name,phone').eq('id',ticket.user_id).maybeSingle();
  const target=window.MakhrajI18n?.language||'ar';
- openModal('<div class="modal-title"><div><div class="eyebrow">SUPPORT</div><h2>'+esc(ticket.subject)+'</h2><div class="meta">'+esc(ticket.profiles?.full_name||'عميل')+' · ترجمة تلقائية '+esc(target.toUpperCase())+'</div></div><button class="close" data-close>×</button></div>'+
+ openModal('<div class="modal-title"><div><div class="eyebrow">SUPPORT</div><h2>'+esc(ticket.subject)+'</h2><div class="meta">'+esc(customer?.full_name||'عميل')+' · ترجمة تلقائية '+esc(target.toUpperCase())+'</div></div><button class="close" data-close>×</button></div>'+
    '<div class="support-thread">'+(messages||[]).map(m=>'<div class="chat-bubble '+(m.is_staff?'staff':'customer')+'"><div class="meta">'+(m.is_staff?'دعم مَخْرَج':'العميل')+' · '+new Date(m.created_at).toLocaleString()+'</div><div class="chat-original">'+esc(m.message)+'</div><div data-admin-translation="'+m.id+'" class="chat-translation"></div></div>').join('')+'</div>'+
    '<div class="stack support-compose"><label>حالة التذكرة<select id="ticketStatusAdmin" class="field">'+['open','in_progress','waiting_customer','resolved','closed'].map(s=>'<option value="'+s+'" '+(ticket.status===s?'selected':'')+'>'+s+'</option>').join('')+'</select></label>'+
    '<textarea id="adminReply" class="field" rows="3" placeholder="رد على العميل"></textarea><div class="two"><button id="saveTicketStatus" class="secondary">حفظ الحالة</button><button id="sendAdminReply" class="primary">إرسال الرد</button></div><div id="adminReplyMsg" class="msg"></div></div>');
