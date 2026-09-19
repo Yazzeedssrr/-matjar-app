@@ -6,6 +6,10 @@ const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelect
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(Number(n||0));
 const slugify=s=>String(s||'').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'');
+
+const SUPPORT_LANGUAGES={ar:'العربية',en:'English',es:'Español',fr:'Français',tr:'Türkçe',de:'Deutsch',it:'Italiano',pt:'Português',ru:'Русский',zh:'中文',ja:'日本語',ko:'한국어',hi:'हिन्दी',ur:'اردو',fa:'فارسی',bn:'বাংলা',id:'Bahasa Indonesia',vi:'Tiếng Việt',pl:'Polski',nl:'Nederlands',sv:'Svenska',uk:'Українська',ro:'Română',el:'Ελληνικά'};
+const supportLanguageOptions=selected=>Object.entries(SUPPORT_LANGUAGES).map(([code,label])=>'<option value="'+code+'" '+(code===selected?'selected':'')+'>'+esc(label)+'</option>').join('');
+
 const state={session:null,profile:null,categories:[],products:[],orders:[],customers:[],coupons:[],tickets:[],settings:null,files:[],editing:null,activeTicket:null};
 
 function showGate(html){$('#adminApp').classList.add('hidden');$('#gate').classList.remove('hidden');$('#gateBody').innerHTML=html}
@@ -188,11 +192,13 @@ async function openAdminTicket(ticketId){
  ]);
  if(tErr||mErr){alert('تعذر فتح المحادثة');return}
  const {data:customer}=await sb.from('profiles').select('id,full_name,phone').eq('id',ticket.user_id).maybeSingle();
- const target=window.MakhrajI18n?.language||'ar';
- openModal('<div class="modal-title"><div><div class="eyebrow">SUPPORT</div><h2>'+esc(ticket.subject)+'</h2><div class="meta">'+esc(customer?.full_name||'عميل')+' · ترجمة تلقائية '+esc(target.toUpperCase())+'</div></div><button class="close" data-close>×</button></div>'+
+ const target=localStorage.getItem('makhraj-admin-support-language')||window.MakhrajI18n?.language||'ar';
+ openModal('<div class="modal-title"><div><div class="eyebrow">SUPPORT</div><h2>'+esc(ticket.subject)+'</h2><div class="meta">'+esc(customer?.full_name||'عميل')+'</div></div><button class="close" data-close>×</button></div>'+
+   '<label>لغة الترجمة<select id="adminSupportTranslationLanguage" class="field">'+supportLanguageOptions(target)+'</select></label>'+
    '<div class="support-thread">'+(messages||[]).map(m=>'<div class="chat-bubble '+(m.is_staff?'staff':'customer')+'"><div class="meta">'+(m.is_staff?'دعم مَخْرَج':'العميل')+' · '+new Date(m.created_at).toLocaleString()+'</div><div class="chat-original">'+esc(m.message)+'</div><div data-admin-translation="'+m.id+'" class="chat-translation"></div></div>').join('')+'</div>'+
    '<div class="stack support-compose"><label>حالة التذكرة<select id="ticketStatusAdmin" class="field">'+['open','in_progress','waiting_customer','resolved','closed'].map(s=>'<option value="'+s+'" '+(ticket.status===s?'selected':'')+'>'+s+'</option>').join('')+'</select></label>'+
    '<textarea id="adminReply" class="field" rows="3" placeholder="رد على العميل"></textarea><div class="two"><button id="saveTicketStatus" class="secondary">حفظ الحالة</button><button id="sendAdminReply" class="primary">إرسال الرد</button></div><div id="adminReplyMsg" class="msg"></div></div>');
+ $('#adminSupportTranslationLanguage').onchange=e=>{localStorage.setItem('makhraj-admin-support-language',e.target.value);openAdminTicket(ticketId)};
  (messages||[]).forEach(m=>translateAdminMessage(m,target));
  $('#saveTicketStatus').onclick=async()=>{
    const {error}=await sb.from('support_tickets').update({status:$('#ticketStatusAdmin').value,updated_at:new Date().toISOString()}).eq('id',ticketId);
@@ -206,7 +212,7 @@ async function openAdminTicket(ticketId){
      sender_user_id:state.session.user.id,
      message:text,
      is_staff:true,
-     source_language:window.MakhrajI18n?.language||'auto'
+     source_language:'auto'
    });
    if(error){msg('#adminReplyMsg',error.message,'err');return}
    await loadSupport(); openAdminTicket(ticketId);
