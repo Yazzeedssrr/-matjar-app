@@ -23,7 +23,7 @@
 
 
   const state = {
-    products: [], categories: [], activeCategory: 'all', search: '',
+    products: [], categories: [], activeCategory: 'all', search: '', sort: 'featured', inStockOnly: true,
     session: null, profile: null, selectedProduct: null, selectedVariant: null, activeSupportTicket: null,
     cart: safeJson('makhraj-cart-prod', []),
     settings:{free_shipping_threshold:cfg.freeShippingThreshold,standard_shipping_fee:cfg.standardShipping,currency:cfg.currency},
@@ -74,7 +74,9 @@
     await Promise.all([loadSettings(), loadCategories(), loadProducts()]);
     bindStatic();
     render();
+    const initialParams=new URLSearchParams(location.search);
     await handlePaymentReturn();
+    if(!initialParams.get('payment')) handleProductDeepLink(initialParams);
   }
 
   async function handlePaymentReturn(){
@@ -114,6 +116,8 @@
     $('#smartPickBtn').onclick = openSmart;
     $('#accountHeroBtn').onclick = ()=>showView('account');
     els.search.addEventListener('input',()=>{ state.search=els.search.value.trim().toLowerCase(); renderProducts(); });
+    const sort=$('#sortProducts'); if(sort) sort.onchange=()=>{state.sort=sort.value;renderProducts();};
+    const stockOnly=$('#inStockOnly'); if(stockOnly) stockOnly.onchange=()=>{state.inStockOnly=stockOnly.checked;renderProducts();};
     $$('.bottom button').forEach(b=>{
       b.onclick=()=>{
         if(b.dataset.view) showView(b.dataset.view);
@@ -196,10 +200,17 @@
     $$('.chip',els.chips).forEach(b=>b.onclick=()=>{state.activeCategory=b.dataset.cat;renderCategories();renderProducts();});
   }
   function filteredProducts(){
-    return state.products.filter(p=>{
+    const list=state.products.filter(p=>{
       const cat=state.activeCategory==='all'||p.category_id===state.activeCategory;
-      const hay=(p.name+' '+(p.description||'')+' '+(p.categories?.name||'')).toLowerCase();
-      return cat && (!state.search || hay.includes(state.search));
+      const hay=(p.name+' '+(p.description||'')+' '+(p.categories?.name||'')+' '+(p.brand||'')+' '+(p.tags||[]).join(' ')).toLowerCase();
+      const stockOk=!state.inStockOnly||totalStock(p)>0;
+      return cat && stockOk && (!state.search || hay.includes(state.search));
+    });
+    return list.sort((a,b)=>{
+      if(state.sort==='price_asc')return minPrice(a)-minPrice(b);
+      if(state.sort==='price_desc')return minPrice(b)-minPrice(a);
+      if(state.sort==='name')return String(a.name).localeCompare(String(b.name),'ar');
+      return Number(b.featured)-Number(a.featured);
     });
   }
   function productImage(p){ return p.product_images?.[0]?.url || ''; }
@@ -216,12 +227,14 @@
       return;
     }
     els.grid.innerHTML=list.map(p=>{
-      const img=productImage(p),stock=totalStock(p),fav=state.favs.has(p.id);
+      const img=productImage(p),stock=totalStock(p),fav=state.favs.has(p.id),price=minPrice(p);
+      const compare=Number(p.compare_at_price||0),discount=compare>price?Math.round((compare-price)/compare*100):0;
       return '<article class="card product" data-product="'+p.id+'">'+
+        (discount>0?'<span class="sale-badge">-'+discount+'%</span>':'')+
         '<button class="fav" data-fav="'+p.id+'" aria-label="المفضلة">'+(fav?'♥':'♡')+'</button>'+
         '<div class="pimg" '+(img?'style="background-image:url(\''+esc(img)+'\')"':'')+'>'+(img?'':'لا توجد صورة')+'</div>'+
         '<div class="pbody"><div class="tiny">'+esc(p.categories?.name||'مَخْرَج')+'</div><h3>'+esc(p.name)+'</h3>'+
-        '<span class="price">'+money(minPrice(p))+'</span> '+(p.compare_at_price?'<span class="old">'+money(p.compare_at_price)+'</span>':'')+
+        '<span class="price">'+money(price)+'</span> '+(compare>price?'<span class="old">'+money(compare)+'</span>':'')+
         '<br><span class="badge">'+(stock>0?(stock<=3?'كمية محدودة':'متوفر'):'نفد المخزون')+'</span>'+
         '<button class="primary" style="width:100%;margin-top:10px" data-open="'+p.id+'" '+(stock<=0?'disabled':'')+'>عرض التفاصيل</button></div></article>';
     }).join('');
@@ -244,7 +257,8 @@
       '<div class="tiny">اختر الخيار المناسب</div><div class="variant-list" id="variantList">'+
       (variants.length?variants.map((v,i)=>'<button class="variant '+(i===0?'on':'')+'" data-variant="'+v.id+'">'+esc(v.title)+' · '+money(v.price??p.base_price)+' <span class="tiny">('+v.stock_quantity+')</span></button>').join(''):'<span class="danger">نفد المخزون</span>')+
       '</div><div class="line"><div class="qty"><button id="qtyMinus">−</button><b id="qtyValue">1</b><button id="qtyPlus">+</button></div><span class="tiny" id="stockText">'+(state.selectedVariant?'المتاح '+state.selectedVariant.stock_quantity:'')+'</span></div>'+
-      '<button class="primary" id="addToCartBtn" style="width:100%;margin-top:16px" '+(!state.selectedVariant?'disabled':'')+'>أضف إلى السلة</button>'+
+      '<div class="product-cta"><button class="primary" id="addToCartBtn" '+(!state.selectedVariant?'disabled':'')+'>أضف إلى السلة</button><button class="secondary" id="shareProductBtn">مشاركة المنتج</button></div>'+
+      '<div class="purchase-trust"><span>✓ السعر والمخزون يعاد التحقق منهما عند الطلب</span><span>✓ الدفع الإلكتروني عبر Stripe عند تفعيله</span></div>'+
       '<div class="section"><h2>التقييمات</h2><span class="tiny">من مشتريات مؤكدة</span></div><div id="reviewsArea"><div class="loading">جارٍ تحميل التقييمات…</div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('[data-fav]',els.panel).onclick=()=>{toggleFavorite(p.id);openProduct(p.id);};
@@ -260,6 +274,7 @@
       $('#stockText',els.panel).textContent='المتاح '+state.selectedVariant.stock_quantity;
     });
     $('#addToCartBtn',els.panel).onclick=()=>addToCart(p,state.selectedVariant,qty);
+    $('#shareProductBtn',els.panel).onclick=()=>shareProduct(p);
     loadReviews(p.id);
   }
 
@@ -283,6 +298,19 @@
     toast('تم إرسال تقييمك للمراجعة');loadReviews(productId);
   }
 
+  function handleProductDeepLink(params=new URLSearchParams(location.search)){
+    const productId=params.get('product'); if(!productId)return;
+    const product=state.products.find(p=>p.id===productId);
+    if(product)setTimeout(()=>openProduct(productId),50);
+  }
+  async function shareProduct(p){
+    const url=new URL(location.href);url.search='';url.searchParams.set('product',p.id);
+    try{
+      if(navigator.share){await navigator.share({title:p.name,text:p.description||p.name,url:url.href});return}
+      await navigator.clipboard.writeText(url.href);toast('تم نسخ رابط المنتج');
+    }catch(e){if(e?.name!=='AbortError')toast('تعذر مشاركة الرابط الآن')}
+  }
+
   function addToCart(p,v,qty){
     if(!v) return;
     const existing=state.cart.find(x=>x.variantId===v.id);
@@ -303,7 +331,7 @@
     const threshold=Number(state.settings.free_shipping_threshold??cfg.freeShippingThreshold),fee=Number(state.settings.standard_shipping_fee??cfg.standardShipping);const sub=cartEstimate(),ship=sub>=threshold||sub===0?0:fee,total=sub+ship;
     openSheet('<div class="sheethead"><h2 style="margin:0">سلة مَخْرَج</h2><button class="close" data-close>×</button></div>'+
       (state.cart.length?state.cart.map(x=>'<div class="cartrow"><div class="cartthumb" '+(x.image?'style="background-image:url(\''+esc(x.image)+'\')"':'')+'></div><div class="grow"><b>'+esc(x.productName)+'</b><div class="tiny">'+esc(x.variantTitle)+'</div><div class="price">'+money(x.price*x.qty)+'</div></div><div class="qty"><button data-dec="'+x.variantId+'">−</button><b>'+x.qty+'</b><button data-inc="'+x.variantId+'">+</button></div></div>').join('')+
-      '<div class="summary"><div class="line"><span>المجموع التقديري</span><b>'+money(sub)+'</b></div><div class="line"><span>الشحن</span><b>'+(ship?money(ship):'مجاني')+'</b></div><div class="line total"><span>الإجمالي التقديري</span><span class="price">'+money(total)+'</span></div><div class="tiny">السعر النهائي والمخزون يعاد التحقق منهما على الخادم عند إنشاء الطلب.</div></div>'+
+      '<div class="summary"><div class="line"><span>المجموع التقديري</span><b>'+money(sub)+'</b></div><div class="line"><span>الشحن</span><b>'+(ship?money(ship):'مجاني')+'</b></div><div class="line total"><span>الإجمالي التقديري</span><span class="price">'+money(total)+'</span></div>'+(sub>0&&threshold>sub?'<div class="shipping-progress"><b>أضف '+money(threshold-sub)+' لتحصل على شحن مجاني</b><div><span style="width:'+Math.min(100,sub/threshold*100)+'%"></span></div></div>':'')+'<div class="tiny">السعر النهائي والمخزون يعاد التحقق منهما على الخادم عند إنشاء الطلب.</div></div>'+
       '<button class="primary" id="checkoutBtn" style="width:100%">متابعة الطلب</button>'
       :'<div class="empty"><b>سلتك فارغة.</b><br>أضف منتجًا وسيظهر هنا مع خياره وكميته.</div>'));
     $('[data-close]',els.panel).onclick=closeSheet;
