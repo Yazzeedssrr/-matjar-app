@@ -12,6 +12,16 @@
   const slugify = s => String(s||'').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu,'-').replace(/^-|-$/g,'');
   const safeJson = (k,d) => { try { return JSON.parse(localStorage.getItem(k) || JSON.stringify(d)); } catch { return d; } };
 
+  const SUPPORT_LANGUAGES = {
+    ar:'العربية',en:'English',es:'Español',fr:'Français',tr:'Türkçe',de:'Deutsch',it:'Italiano',pt:'Português',
+    ru:'Русский',zh:'中文',ja:'日本語',ko:'한국어',hi:'हिन्दी',ur:'اردو',fa:'فارسی',bn:'বাংলা',
+    id:'Bahasa Indonesia',vi:'Tiếng Việt',pl:'Polski',nl:'Nederlands',sv:'Svenska',uk:'Українська',ro:'Română',el:'Ελληνικά'
+  };
+  function supportLanguageOptions(selected){
+    return Object.entries(SUPPORT_LANGUAGES).map(([code,label])=>'<option value="'+code+'" '+(code===selected?'selected':'')+'>'+esc(label)+'</option>').join('');
+  }
+
+
   const state = {
     products: [], categories: [], activeCategory: 'all', search: '',
     session: null, profile: null, selectedProduct: null, selectedVariant: null, activeSupportTicket: null,
@@ -671,11 +681,13 @@
       sb.from('support_messages').select('id,sender_user_id,message,is_staff,source_language,created_at').eq('ticket_id',ticketId).order('created_at')
     ]);
     if(tErr||mErr){toast('تعذر فتح التذكرة');return}
-    const target=window.MakhrajI18n?.language||'ar';
-    openSheet('<div class="sheethead"><div><div class="tiny">'+supportStatus(ticket.status)+'</div><h2 style="margin:2px 0">'+esc(ticket.subject)+'</h2><div class="tiny">ترجمة تلقائية · '+esc(target.toUpperCase())+'</div></div><button class="close" data-close>×</button></div><div>'+
+    const target=localStorage.getItem('makhraj-support-language')||window.MakhrajI18n?.language||'ar';
+    openSheet('<div class="sheethead"><div><div class="tiny">'+supportStatus(ticket.status)+'</div><h2 style="margin:2px 0">'+esc(ticket.subject)+'</h2></div><button class="close" data-close>×</button></div>'+
+      '<label class="tiny">لغة الترجمة<select id="supportTranslationLanguage" class="field">'+supportLanguageOptions(target)+'</select></label><div>'+
       (messages||[]).map(m=>'<div class="summary support-message '+(m.is_staff?'staff':'customer')+'"><div class="tiny">'+(m.is_staff?'دعم مَخْرَج':'أنت')+' · '+new Date(m.created_at).toLocaleString()+'</div><div class="original-message">'+esc(m.message)+'</div><div class="translation-box" data-translation="'+m.id+'"></div></div>').join('')+
       '</div>'+(ticket.status!=='closed'&&ticket.status!=='resolved'?'<div class="formgrid"><textarea class="field" id="replyMessage" rows="3" placeholder="اكتب ردك"></textarea><button class="primary" id="sendReply">إرسال الرد</button><div id="replyMsg" class="tiny"></div></div>':'<div class="notice">هذه التذكرة مغلقة.</div>'));
     $('[data-close]',els.panel).onclick=closeSheet;
+    $('#supportTranslationLanguage',els.panel).onchange=e=>{localStorage.setItem('makhraj-support-language',e.target.value);openTicket(ticketId)};
     (messages||[]).forEach(m=>translateSupportMessage(m,target));
     const btn=$('#sendReply',els.panel);if(btn)btn.onclick=async()=>{
       const text=$('#replyMessage',els.panel).value.trim(),m=$('#replyMsg',els.panel);if(!text){m.textContent='اكتب رسالة أولًا.';return}
@@ -684,7 +696,7 @@
         sender_user_id:state.session.user.id,
         message:text,
         is_staff:false,
-        source_language:window.MakhrajI18n?.language||'auto'
+        source_language:'auto'
       });
       if(error){m.textContent=error.message;m.className='danger';return}
       openTicket(ticketId);
