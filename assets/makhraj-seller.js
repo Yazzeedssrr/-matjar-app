@@ -41,6 +41,8 @@ function bind(){
  $('#logoutBtn').onclick=logout;
  $$('.tab').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
  $('#refreshOverview').onclick=loadOverview;
+ const goProducts=$('#goProductsBtn'); if(goProducts) goProducts.onclick=()=>switchTab('products');
+ const goSettings=$('#goSettingsBtn'); if(goSettings) goSettings.onclick=()=>switchTab('settings');
  $('#refreshProducts').onclick=loadProducts;
  $('#refreshOrders').onclick=loadOrders;
  $('#refreshCustomers').onclick=loadCustomers;
@@ -102,6 +104,28 @@ async function loadOverview(){
    !pending&&!low&&!missingCostItems?'<div class="card-row"><b>لا توجد تنبيهات تشغيلية الآن.</b></div>':''
  ].join('');
  if(state.settings){$('#paymentModeTitle').textContent=state.settings.test_mode?'Stripe Sandbox':'Stripe Live';$('#paymentModeText').textContent=state.settings.test_mode?'الدفع الإلكتروني يعمل في وضع الاختبار حاليًا.':'المتجر في وضع الدفع الحقيقي.'}
+ renderLaunchChecklist();
+}
+
+function renderLaunchChecklist(){
+ const active=state.products.filter(p=>p.status==='active');
+ const hasPublished=active.length>0;
+ const hasSellable=active.some(p=>(p.product_variants||[]).some(v=>v.is_active&&Number(v.stock_quantity)>0));
+ const hasPhotos=active.length>0&&active.every(p=>(p.product_images||[]).length>0);
+ const costsReady=active.length>0&&active.every(p=>(p.product_variants||[]).filter(v=>v.is_active).every(v=>state.costByVariant[v.id]!==undefined));
+ const checkoutReady=!!state.settings?.checkout_enabled;
+ const realPayment=!!state.settings&&!state.settings.test_mode&&(!!state.settings.stripe_online_enabled||!!state.settings.cash_on_delivery_enabled);
+ const steps=[
+   ['منتج منشور',hasPublished,'انشر منتجًا حقيقيًا واحدًا على الأقل.'],
+   ['مخزون قابل للبيع',hasSellable,'يجب أن تكون هناك كمية أكبر من صفر.'],
+   ['صور للمنتجات',hasPhotos,'الصور تزيد الثقة وتمنع نشر منتج ناقص.'],
+   ['تكلفة الشراء مسجلة',costsReady,'حتى تعرف هامش الربح الحقيقي تقريبًا.'],
+   ['إتمام الطلب مفعّل',checkoutReady,'يجب أن يستطيع الزبون إكمال الطلب.'],
+   ['وسيلة دفع حقيقية',realPayment,state.settings?.test_mode?'Stripe ما زال Sandbox؛ لن تستلم أموالًا حقيقية بعد.':'فعّل Stripe Live أو وسيلة دفع حقيقية.']
+ ];
+ const done=steps.filter(x=>x[1]).length,score=Math.round(done/steps.length*100);
+ const scoreEl=$('#launchScore');if(scoreEl)scoreEl.textContent=score+'%';
+ const box=$('#launchChecklist');if(box)box.innerHTML=steps.map(([title,ok,note])=>'<div class="launch-step '+(ok?'done':'todo')+'"><span class="launch-icon">'+(ok?'✓':'!')+'</span><div><b>'+esc(title)+'</b><div class="meta">'+esc(note)+'</div></div></div>').join('');
 }
 
 async function loadCategories(){
