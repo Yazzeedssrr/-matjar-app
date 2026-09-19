@@ -90,6 +90,8 @@
 
   function bindStatic(){
     $('#cartTopBtn').onclick = openCart;
+    const browse=$('#browseNowBtn'); if(browse) browse.onclick=()=>document.querySelector('#productGrid')?.scrollIntoView({behavior:'smooth',block:'start'});
+    const heroNeed=$('#heroNeedBtn'); if(heroNeed) heroNeed.onclick=()=>document.querySelector('.need-hero')?.scrollIntoView({behavior:'smooth',block:'start'});
     $('#refreshBtn').onclick = async()=>{ await Promise.all([loadCategories(),loadProducts()]); render(); toast('تم تحديث المتجر'); };
     $('#smartPickBtn').onclick = openSmart;
     $('#accountHeroBtn').onclick = ()=>showView('account');
@@ -152,8 +154,20 @@
 
   function render(){
     renderCategories();
+    renderCategoryShowcase();
     renderProducts();
     renderAccount();
+  }
+  function renderCategoryShowcase(){
+    const box=$('#categoryShowcase'); if(!box)return;
+    box.innerHTML=state.categories.length
+      ? state.categories.map(c=>'<button class="category-tile" data-cat-tile="'+c.id+'"><span>قسم</span><b>'+esc(c.name)+'</b><span class="arrow">←</span></button>').join('')
+      : '<div class="empty">ستظهر الأقسام هنا عند إضافتها.</div>';
+    $('[data-cat-tile]',box).forEach(b=>b.onclick=()=>{
+      state.activeCategory=b.dataset.catTile;
+      renderCategories();renderProducts();
+      document.querySelector('#productGrid')?.scrollIntoView({behavior:'smooth',block:'start'});
+    });
   }
   function renderCategories(){
     const all='<button class="chip '+(state.activeCategory==='all'?'on':'')+'" data-cat="all">الكل</button>';
