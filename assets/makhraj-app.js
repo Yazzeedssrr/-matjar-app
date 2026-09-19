@@ -14,7 +14,7 @@
 
   const state = {
     products: [], categories: [], activeCategory: 'all', search: '',
-    session: null, profile: null, selectedProduct: null, selectedVariant: null,
+    session: null, profile: null, selectedProduct: null, selectedVariant: null, activeSupportTicket: null,
     cart: safeJson('makhraj-cart-prod', []),
     settings:{free_shipping_threshold:cfg.freeShippingThreshold,standard_shipping_fee:cfg.standardShipping,currency:cfg.currency},
     favs: new Set(safeJson('makhraj-favs-prod', []))
@@ -51,6 +51,7 @@
     document.body.style.overflow='';
     state.selectedProduct = null;
     state.selectedVariant = null;
+    state.activeSupportTicket = null;
   }
   els.sheet.addEventListener('click',e=>{ if(e.target===els.sheet) closeSheet(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSheet(); });
@@ -92,6 +93,13 @@
     $('#cartTopBtn').onclick = openCart;
     const browse=$('#browseNowBtn'); if(browse) browse.onclick=()=>document.querySelector('#productGrid')?.scrollIntoView({behavior:'smooth',block:'start'});
     const heroNeed=$('#heroNeedBtn'); if(heroNeed) heroNeed.onclick=()=>document.querySelector('.need-hero')?.scrollIntoView({behavior:'smooth',block:'start'});
+    document.addEventListener('makhraj:languagechange', async e=>{
+      const language=e.detail?.language;
+      if(state.session && language){
+        await sb.from('profiles').update({preferred_language:language}).eq('id',state.session.user.id);
+        if(state.activeSupportTicket) openTicket(state.activeSupportTicket);
+      }
+    });
     $('#refreshBtn').onclick = async()=>{ await Promise.all([loadCategories(),loadProducts()]); render(); toast('تم تحديث المتجر'); };
     $('#smartPickBtn').onclick = openSmart;
     $('#accountHeroBtn').onclick = ()=>showView('account');
@@ -116,6 +124,9 @@
 
   async function afterAuth(){
     await loadProfile();
+    if(state.profile?.preferred_language && !localStorage.getItem('makhraj-language')){
+      window.MakhrajI18n?.setLanguage(state.profile.preferred_language);
+    }
     const adminTop=$('#adminTopBtn');
     if(adminTop){
       adminTop.classList.toggle('hidden', state.profile?.role!=='admin');
@@ -654,21 +665,42 @@
   }
 
   async function openTicket(ticketId){
+    state.activeSupportTicket=ticketId;
     const [{data:ticket,error:tErr},{data:messages,error:mErr}]=await Promise.all([
       sb.from('support_tickets').select('*').eq('id',ticketId).single(),
-      sb.from('support_messages').select('id,sender_user_id,message,is_staff,created_at').eq('ticket_id',ticketId).order('created_at')
+      sb.from('support_messages').select('id,sender_user_id,message,is_staff,source_language,created_at').eq('ticket_id',ticketId).order('created_at')
     ]);
     if(tErr||mErr){toast('تعذر فتح التذكرة');return}
-    openSheet('<div class="sheethead"><div><div class="tiny">'+supportStatus(ticket.status)+'</div><h2 style="margin:2px 0">'+esc(ticket.subject)+'</h2></div><button class="close" data-close>×</button></div><div>'+
-      (messages||[]).map(m=>'<div class="summary" style="margin-right:'+(m.is_staff?'0':'18px')+'"><div class="tiny">'+(m.is_staff?'دعم مَخْرَج':'أنت')+' · '+new Date(m.created_at).toLocaleString('ar-US')+'</div><div>'+esc(m.message)+'</div></div>').join('')+
+    const target=window.MakhrajI18n?.language||'ar';
+    openSheet('<div class="sheethead"><div><div class="tiny">'+supportStatus(ticket.status)+'</div><h2 style="margin:2px 0">'+esc(ticket.subject)+'</h2><div class="tiny">ترجمة تلقائية · '+esc(target.toUpperCase())+'</div></div><button class="close" data-close>×</button></div><div>'+
+      (messages||[]).map(m=>'<div class="summary support-message '+(m.is_staff?'staff':'customer')+'"><div class="tiny">'+(m.is_staff?'دعم مَخْرَج':'أنت')+' · '+new Date(m.created_at).toLocaleString()+'</div><div class="original-message">'+esc(m.message)+'</div><div class="translation-box" data-translation="'+m.id+'"></div></div>').join('')+
       '</div>'+(ticket.status!=='closed'&&ticket.status!=='resolved'?'<div class="formgrid"><textarea class="field" id="replyMessage" rows="3" placeholder="اكتب ردك"></textarea><button class="primary" id="sendReply">إرسال الرد</button><div id="replyMsg" class="tiny"></div></div>':'<div class="notice">هذه التذكرة مغلقة.</div>'));
     $('[data-close]',els.panel).onclick=closeSheet;
+    (messages||[]).forEach(m=>translateSupportMessage(m,target));
     const btn=$('#sendReply',els.panel);if(btn)btn.onclick=async()=>{
       const text=$('#replyMessage',els.panel).value.trim(),m=$('#replyMsg',els.panel);if(!text){m.textContent='اكتب رسالة أولًا.';return}
-      const {error}=await sb.from('support_messages').insert({ticket_id:ticketId,sender_user_id:state.session.user.id,message:text,is_staff:false});
+      const {error}=await sb.from('support_messages').insert({
+        ticket_id:ticketId,
+        sender_user_id:state.session.user.id,
+        message:text,
+        is_staff:false,
+        source_language:window.MakhrajI18n?.language||'auto'
+      });
       if(error){m.textContent=error.message;m.className='danger';return}
       openTicket(ticketId);
     };
+  }
+
+  async function translateSupportMessage(message,target){
+    const box=$('[data-translation="'+message.id+'"]',els.panel); if(!box)return;
+    if(message.source_language===target){box.innerHTML='';return}
+    box.innerHTML='<div class="translation-label">جارٍ الترجمة…</div>';
+    const {data,error}=await sb.functions.invoke('translate-message',{body:{message_id:message.id,target_language:target}});
+    if(!box.isConnected)return;
+    if(error||!data?.translated_text){box.innerHTML='<div class="translation-error">تعذر الترجمة الآن</div>';return}
+    if(String(data.translated_text).trim()===String(message.message).trim()){box.innerHTML='';return}
+    box.innerHTML='<div class="translation-label">الترجمة</div><div class="translated-message">'+esc(data.translated_text)+'</div>';
+    window.MakhrajI18n?.apply(box);
   }
 
   function supportStatus(s){return({open:'مفتوحة',waiting_customer:'بانتظارك',in_progress:'قيد المعالجة',resolved:'تم الحل',closed:'مغلقة'})[s]||s}
