@@ -1,19 +1,27 @@
-const CACHE='makhraj-prod-v10-revenue2';
-const SHELL=[
-  './app.html','./manifest.webmanifest','./assets/makhraj-theme.css','./assets/makhraj-app.css',
-  './assets/makhraj-config.js','./assets/makhraj-i18n.js','./assets/makhraj-app.js','./assets/makhraj-need.js','./assets/makhraj-bundles.js'
-];
-self.addEventListener('install',event=>{self.skipWaiting();event.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)))});
-self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
+/* Cache only this app's public shell. Never clear IndexedDB, localStorage, or other apps' caches. */
+const SCOPE=new URL(self.registration.scope);
+const PREFIX='makhraj-shell-'+encodeURIComponent(SCOPE.pathname)+'-';
+const CACHE=PREFIX+'20260920-safety2';
+self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(()=>self.skipWaiting()));});
+self.addEventListener('activate',event=>{
+ event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith(PREFIX)&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
+});
 self.addEventListener('fetch',event=>{
-  if(event.request.method!=='GET')return;
-  const r=event.request;
-  const same=new URL(r.url).origin===location.origin;
-  if(r.mode==='navigate'){
-    event.respondWith(fetch(r,{cache:'no-store'}).then(resp=>{if(resp?.ok){const copy=resp.clone();caches.open(CACHE).then(c=>c.put(r,copy))}return resp}).catch(()=>caches.match(r).then(x=>x||caches.match('./app.html'))));
-    return;
+ const request=event.request,url=new URL(request.url);
+ if(request.method!=='GET'||url.origin!==SCOPE.origin||!url.pathname.startsWith(SCOPE.pathname))return;
+ const relative=url.pathname.slice(SCOPE.pathname.length);
+ if(!/^(app\.html|seller\.html|manifest\.webmanifest|assets\/[A-Za-z0-9._/-]+\.(js|css|png|jpg|webp|svg))$/.test(relative))return;
+ const key=new Request(new URL(relative,SCOPE).href);
+ event.respondWith((async()=>{
+  const cache=await caches.open(CACHE);
+  try{
+   const response=await fetch(request,{cache:'no-store'});
+   if(response.ok&&response.type!=='opaque')await cache.put(key,response.clone());
+   return response;
+  }catch{
+   const saved=await cache.match(key);
+   if(saved)return saved;
+   return new Response('Offline. Reconnect to load this page.',{status:503,headers:{'Content-Type':'text/plain; charset=utf-8'}});
   }
-  if(same){
-    event.respondWith(fetch(r,{cache:'no-store'}).then(resp=>{if(resp?.ok){const copy=resp.clone();caches.open(CACHE).then(c=>c.put(r,copy))}return resp}).catch(()=>caches.match(r)));
-  }
+ })());
 });
