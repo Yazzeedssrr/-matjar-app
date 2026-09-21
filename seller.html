@@ -1,189 +1,56 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#070a0d">
-  <title>إدارة مَخْرَج</title>
-  <link rel="stylesheet" href="assets/makhraj-theme.css?v=20260919-revenue2">
-  <link rel="stylesheet" href="assets/makhraj-seller.css?v=20260919-revenue2">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#070a0d">
+<title>إدارة مَخْرَج</title>
+<link rel="stylesheet" href="assets/makhraj-theme.css?v=20260920-safety2">
+<link rel="stylesheet" href="assets/makhraj-seller.css?v=20260920-safety2">
+<link rel="stylesheet" href="assets/makhraj-admin-safety.css?v=20260920-safety2">
 </head>
 <body>
-  <main class="admin-shell">
-    <header class="topbar">
-      <div>
-        <div class="eyebrow">MAKHRAJ COMMERCE</div>
-        <h1>إدارة المتجر</h1>
-        <p>منتجات، مخزون، طلبات، عملاء، خصومات وإعدادات — من الآيفون.</p>
-      </div>
-      <div class="admin-top-actions"><select id="languageSwitcher" class="lang-switch" data-no-i18n aria-label="Language"></select><a class="ghost" href="app.html">فتح المتجر</a></div>
-    </header>
-
-    <section id="gate" class="panel auth-panel">
-      <div class="eyebrow">دخول محمي</div>
-      <h2>حساب الإدارة</h2>
-      <div id="gateBody" class="stack"></div>
-    </section>
-
-    <section id="adminApp" class="hidden">
-      <div class="connection-row">
-        <span><i class="dot"></i> متصل بقاعدة مَخْرَج</span>
-        <button id="logoutBtn" class="text-btn">تسجيل الخروج</button>
-      </div>
-
-      <nav class="tabs" aria-label="أقسام الإدارة">
-        <button class="tab active" data-tab="overview">نظرة عامة</button>
-        <button class="tab" data-tab="products">المنتجات</button>
-        <button class="tab" data-tab="orders">الطلبات</button>
-        <button class="tab" data-tab="customers">العملاء</button>
-        <button class="tab" data-tab="messages">الرسائل</button>
-        <button class="tab" data-tab="promos">الخصومات</button>
-        <button class="tab" data-tab="settings">الإعدادات</button>
-      </nav>
-
-      <section class="view active" id="view-overview">
-        <div class="metric-grid">
-          <div class="metric"><span>المبيعات المدفوعة</span><b id="mRevenue">$0.00</b></div>
-          <div class="metric profit-metric"><span>الربح الإجمالي المقدر</span><b id="mGrossProfit">—</b></div>
-          <div class="metric"><span>الطلبات</span><b id="mOrders">0</b></div>
-          <div class="metric"><span>المنتجات المنشورة</span><b id="mProducts">0</b></div>
-          <div class="metric"><span>مخزون منخفض</span><b id="mLow">0</b></div>
-        </div>
-        <section class="panel launch-panel">
-          <div class="section-head"><div><div class="eyebrow">جاهزية البيع</div><h2>هل المتجر جاهز لاستقبال أموال حقيقية؟</h2></div><span id="launchScore" class="launch-score">0%</span></div>
-          <div id="launchChecklist" class="launch-checklist"></div>
-          <div class="launch-actions"><button class="secondary" id="goProductsBtn">المنتجات</button><button class="secondary" id="goSettingsBtn">إعدادات الدفع</button></div>
-        </section>
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">ما يحتاج انتباهك</div><h2>ملخص التشغيل</h2></div><button class="ghost small" id="refreshOverview">تحديث</button></div>
-          <div id="overviewFeed" class="list"></div>
-        </section>
-        <section class="panel sandbox-note">
-          <div class="eyebrow">الدفع</div>
-          <h2 id="paymentModeTitle">Sandbox</h2>
-          <p id="paymentModeText">الدفع الإلكتروني ما زال في وضع الاختبار. لن يتم تحويل أموال حقيقية حتى نفعّل Live لاحقًا.</p>
-        </section>
-      </section>
-
-      <section class="view" id="view-products">
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">كتالوج حقيقي</div><h2 id="formTitle">إضافة منتج</h2></div><button id="resetProductBtn" class="ghost small">منتج جديد</button></div>
-          <div class="stack">
-            <label>اسم المنتج<input id="name" class="field" placeholder="مثال: شبكة أمامية هوندا أكورد"></label>
-            <div class="two">
-              <label>السعر<input id="price" class="field" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="45"></label>
-              <label>السعر قبل الخصم<input id="comparePrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="اختياري"></label>
-            </div>
-            <div class="two">
-              <label>تكلفة الشراء<input id="costPrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="لا تظهر للزبون"></label>
-              <div class="profit-preview"><span>ربح متوقع للوحدة</span><b id="unitProfitPreview">—</b><small>قبل رسوم الدفع والشحن والضرائب</small></div>
-            </div>
-            <div class="two">
-              <label>الكمية<input id="stock" class="field" type="number" min="0" step="1" inputmode="numeric" value="1"></label>
-              <label>القسم<select id="category" class="field"></select></label>
-            </div>
-            <div class="two">
-              <label>العلامة التجارية<input id="brand" class="field" placeholder="Honda / Apple / Generic..."></label>
-              <label>SKU<input id="sku" class="field" placeholder="يُنشأ تلقائيًا"></label>
-            </div>
-            <div class="two">
-              <label>Barcode<input id="barcode" class="field" placeholder="اختياري"></label>
-              <label>الوزن بالجرام<input id="weight" class="field" type="number" min="0" step="1" inputmode="numeric" placeholder="اختياري"></label>
-            </div>
-            <details class="advanced">
-              <summary>تفاصيل إضافية للمنتج</summary>
-              <div class="stack detail-stack">
-                <label>رقم القطعة / OEM<input id="partNumber" class="field" placeholder="مفيد لقطع السيارات"></label>
-                <div class="two">
-                  <label>التوافق / السنوات<input id="compatibility" class="field" placeholder="مثال: Accord 2018-2022"></label>
-                  <label>الموقع / النوع<input id="position" class="field" placeholder="أمامي / خلفي / مقاس / لون"></label>
-                </div>
-                <label>الحالة<select id="condition" class="field"><option>جديد</option><option>جديد - علبة مفتوحة</option><option>مستعمل ممتاز</option><option>مستعمل</option></select></label>
-              </div>
-            </details>
-            <label>الوصف<textarea id="description" class="field" rows="5" placeholder="وصف واضح للمنتج، ما الذي يشمله، حالته وتوافقه."></textarea></label>
-            <label>صور المنتج<input id="photos" class="file" type="file" accept="image/jpeg,image/png,image/webp,image/avif" multiple></label>
-            <div id="existingPhotos" class="preview"></div>
-            <div id="photoPreview" class="preview"></div>
-            <div class="hint">يمكنك رفع حتى 6 صور، بحد أقصى 5MB للصورة.</div>
-            <div class="actions"><button id="saveDraftBtn" class="secondary">حفظ كمسودة</button><button id="publishBtn" class="primary">حفظ ونشر</button></div>
-            <div id="formMsg" class="msg"></div>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">الأقسام</div><h2>إدارة الأقسام</h2></div></div>
-          <div class="inline-form"><input id="newCategoryName" class="field" placeholder="قسم جديد"><button id="addCategoryBtn" class="secondary">إضافة</button></div>
-          <div id="categoryList" class="chips"></div>
-        </section>
-
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">المخزون</div><h2>كل المنتجات</h2></div><button id="refreshProducts" class="ghost small">تحديث</button></div>
-          <input id="productSearch" class="field" placeholder="بحث بالاسم أو SKU أو القسم...">
-          <div id="inventory" class="list"></div>
-        </section>
-      </section>
-
-      <section class="view" id="view-orders">
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">التنفيذ</div><h2>الطلبات</h2></div><button id="refreshOrders" class="ghost small">تحديث</button></div>
-          <div class="filters">
-            <select id="orderStatusFilter" class="field"><option value="">كل الحالات</option><option value="pending">Pending</option><option value="confirmed">Confirmed</option><option value="processing">Processing</option><option value="shipped">Shipped</option><option value="delivered">Delivered</option><option value="cancelled">Cancelled</option><option value="refunded">Refunded</option></select>
-          </div>
-          <div id="ordersList" class="list"></div>
-        </section>
-      </section>
-
-      <section class="view" id="view-customers">
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">CRM مبسط</div><h2>العملاء</h2></div><button id="refreshCustomers" class="ghost small">تحديث</button></div>
-          <div id="customersList" class="list"></div>
-        </section>
-      </section>
-
-      <section class="view" id="view-messages">
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">SUPPORT INBOX</div><h2>محادثات الدعم</h2></div><button id="refreshSupport" class="ghost small">تحديث</button></div>
-          <p class="muted">الرسائل تُحفظ بالنص الأصلي، وتظهر لك ترجمة تلقائية حسب اللغة التي اخترتها.</p>
-          <div id="supportInbox" class="list"></div>
-        </section>
-      </section>
-
-      <section class="view" id="view-promos">
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">تسويق</div><h2>كود خصم جديد</h2></div></div>
-          <div class="stack">
-            <div class="two"><label>الكود<input id="couponCode" class="field" placeholder="WELCOME10"></label><label>النوع<select id="couponType" class="field"><option value="percent">نسبة %</option><option value="fixed">مبلغ ثابت $</option></select></label></div>
-            <div class="two"><label>القيمة<input id="couponValue" class="field" type="number" min="0" step="0.01"></label><label>الحد الأدنى للطلب<input id="couponMin" class="field" type="number" min="0" step="0.01" value="0"></label></div>
-            <button id="createCouponBtn" class="primary">إنشاء الكود</button><div id="couponMsg" class="msg"></div>
-          </div>
-        </section>
-        <section class="panel"><div class="section-head"><div><div class="eyebrow">الحالية</div><h2>أكواد الخصم</h2></div></div><div id="couponsList" class="list"></div></section>
-      </section>
-
-      <section class="view" id="view-settings">
-        <section class="panel">
-          <div class="section-head"><div><div class="eyebrow">إعدادات المتجر</div><h2>البيع والشحن</h2></div></div>
-          <div class="stack">
-            <label>اسم المتجر<input id="storeName" class="field"></label>
-            <div class="two"><label>رسوم الشحن القياسية<input id="shippingFee" class="field" type="number" min="0" step="0.01"></label><label>شحن مجاني ابتداءً من<input id="freeShipping" class="field" type="number" min="0" step="0.01"></label></div>
-            <label>بريد الدعم<input id="supportEmail" class="field" type="email"></label>
-            <div class="toggle-list">
-              <label><input id="checkoutEnabled" type="checkbox"> تفعيل إتمام الطلب</label>
-              <label><input id="stripeEnabled" type="checkbox"> الدفع الإلكتروني عبر Stripe</label>
-              <label><input id="codEnabled" type="checkbox"> الدفع عند الاستلام</label>
-            </div>
-            <button id="saveSettingsBtn" class="primary">حفظ الإعدادات</button><div id="settingsMsg" class="msg"></div>
-          </div>
-        </section>
-      </section>
-    </section>
-  </main>
-
-  <div id="modal" class="modal" aria-hidden="true"><div id="modalCard" class="modal-card"></div></div>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="assets/makhraj-config.js?v=20260919-revenue2"></script>
-  <script src="assets/makhraj-i18n.js?v=20260919-revenue2"></script>
-  <script src="assets/makhraj-seller.js?v=20260919-revenue2"></script>
+<main class="admin-shell">
+<header class="topbar"><div><div class="eyebrow">MAKHRAJ COMMERCE</div><h1>إدارة المتجر</h1><p>منتجاتك وطلباتك في مكان واحد، مع حماية إضافية لعملك أثناء الإدخال.</p></div><div class="admin-top-actions"><select id="languageSwitcher" class="lang-switch" data-no-i18n aria-label="Language"></select><a class="ghost" href="app.html">فتح المتجر</a></div></header>
+<section id="gate" class="panel auth-panel"><div class="eyebrow">دخول محمي</div><h2>حساب الإدارة</h2><div id="gateBody" class="stack"><div class="hint">جارٍ التحقق من تسجيل الدخول…</div></div></section>
+<section id="adminApp" class="hidden">
+<div class="connection-row"><span><i class="dot"></i> إدارة مَخْرَج</span><button id="logoutBtn" class="text-btn">تسجيل الخروج</button></div>
+<nav class="tabs" aria-label="أقسام الإدارة"><button class="tab active" data-tab="overview">نظرة عامة</button><button class="tab" data-tab="products">المنتجات</button><button class="tab" data-tab="orders">الطلبات</button><button class="tab" data-tab="customers">العملاء</button><button class="tab" data-tab="messages">الرسائل</button><button class="tab" data-tab="promos">الخصومات</button><button class="tab" data-tab="settings">الإعدادات</button></nav>
+<section class="view active" id="view-overview">
+<div class="metric-grid"><div class="metric"><span>المبيعات المدفوعة</span><b id="mRevenue">—</b></div><div class="metric profit-metric"><span>هامش المنتجات المقدر</span><b id="mGrossProfit">—</b></div><div class="metric"><span>الطلبات</span><b id="mOrders">—</b></div><div class="metric"><span>المنتجات المنشورة</span><b id="mProducts">—</b></div><div class="metric"><span>مخزون منخفض</span><b id="mLow">—</b></div></div>
+<section class="panel launch-panel"><div class="section-head"><div><div class="eyebrow">التجهيز</div><h2>خطوات تجهيز المتجر</h2></div><span id="launchScore" class="launch-score">—</span></div><div id="launchChecklist" class="launch-checklist"></div><div class="launch-actions"><button class="secondary" id="goProductsBtn">المنتجات</button><button class="secondary" id="goSettingsBtn">إعدادات الدفع</button></div></section>
+<section class="panel"><div class="section-head"><div><div class="eyebrow">ما يحتاج انتباهك</div><h2>ملخص التشغيل</h2></div><button class="ghost small" id="refreshOverview">تحديث</button></div><div id="overviewFeed" class="list"></div></section>
+<section class="panel sandbox-note"><div class="eyebrow">الدفع</div><h2 id="paymentModeTitle">جارٍ التحقق…</h2><p id="paymentModeText">التحقق من إعدادات الدفع لا يغير المفاتيح أو بيئة Stripe.</p></section>
+</section>
+<section class="view" id="view-products">
+<section class="panel"><div class="section-head"><div><div class="eyebrow">المنتج</div><h2 id="formTitle">إضافة منتج</h2></div><button id="resetProductBtn" class="ghost small">منتج جديد</button></div>
+<div class="stack">
+<label>اسم المنتج<input id="name" class="field" maxlength="200" placeholder="اسم واضح للمنتج"></label>
+<div class="two"><label>السعر<input id="price" class="field" type="number" min="0.01" step="0.01" inputmode="decimal"></label><label>السعر قبل الخصم<input id="comparePrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="اختياري"></label></div>
+<div class="two"><label>تكلفة الشراء<input id="costPrice" class="field" type="number" min="0" step="0.01" inputmode="decimal" placeholder="لا تظهر للزبون"><span class="hint">تركها فارغة عند التعديل يحافظ على التكلفة المحفوظة.</span></label><div class="profit-preview"><span>ربح متوقع للوحدة</span><b id="unitProfitPreview">—</b><small>قبل رسوم الدفع والشحن والضرائب</small></div></div>
+<div class="two"><label>الكمية<input id="stock" class="field" type="number" min="0" step="1" inputmode="numeric" value="1"></label><label>القسم<select id="category" class="field"></select></label></div>
+<div class="two"><label>العلامة التجارية<input id="brand" class="field" maxlength="100" placeholder="اختياري"></label><label>SKU<input id="sku" class="field" maxlength="100" placeholder="يُنشأ تلقائيًا عند تركه فارغًا"></label></div>
+<div class="two"><label>Barcode<input id="barcode" class="field" maxlength="100" placeholder="اختياري"></label><label>الوزن بالجرام<input id="weight" class="field" type="number" min="0" step="1" inputmode="numeric" placeholder="اختياري"></label></div>
+<details class="advanced"><summary>تفاصيل إضافية للمنتج</summary><div class="stack detail-stack"><label>رقم القطعة / OEM<input id="partNumber" class="field" placeholder="مفيد لقطع السيارات"></label><div class="two"><label>التوافق / السنوات<input id="compatibility" class="field" placeholder="اكتب التوافق الذي تحققت منه فقط"></label><label>الموقع / النوع<input id="position" class="field" placeholder="أمامي / خلفي / مقاس / لون"></label></div><label>الحالة<select id="condition" class="field"><option value="جديد">جديد</option><option value="جديد - علبة مفتوحة">جديد - علبة مفتوحة</option><option value="مستعمل ممتاز">مستعمل ممتاز</option><option value="مستعمل">مستعمل</option></select></label></div></details>
+<label>الوصف<textarea id="description" class="field" rows="5" maxlength="10000" placeholder="الوصف والحالة والتوافق ومحتويات العبوة"></textarea></label>
+<label>صور المنتج<input id="photos" class="file" type="file" accept="image/*" multiple></label><div id="existingPhotos" class="preview"></div><div id="photoPreview" class="preview"></div><div class="hint">حتى 6 صور جديدة في الدفعة. تُجهز نسخة JPG لا يتجاوز ضلعها الأكبر 1600 بكسل. لا تُحذف صورك الأصلية من الهاتف.</div>
+<div class="actions editor-actions"><button id="saveDraftBtn" class="secondary">حفظ كمسودة</button><button id="publishBtn" class="primary">حفظ ونشر</button></div><div id="formMsg" class="msg" aria-live="polite"></div>
+</div></section>
+<section class="panel"><div class="section-head"><div><div class="eyebrow">الأقسام</div><h2>إدارة الأقسام</h2></div></div><div class="inline-form"><input id="newCategoryName" class="field" placeholder="قسم جديد" maxlength="100"><button id="addCategoryBtn" class="secondary">إضافة</button></div><div id="categoryList" class="chips"></div></section>
+<section class="panel"><div class="section-head"><div><div class="eyebrow">المخزون</div><h2>كل المنتجات</h2></div><button id="refreshProducts" class="ghost small">تحديث</button></div><input id="productSearch" class="field" placeholder="بحث بالاسم أو SKU أو القسم..."><div id="inventory" class="list"></div></section>
+</section>
+<section class="view" id="view-orders"><section class="panel"><div class="section-head"><h2>الطلبات</h2><button id="refreshOrders" class="ghost small">تحديث</button></div><div class="filters"><select id="orderStatusFilter" class="field"><option value="">كل الحالات</option><option value="pending">بانتظار التأكيد</option><option value="confirmed">مؤكد</option><option value="processing">قيد التجهيز</option><option value="shipped">تم الشحن</option><option value="delivered">تم التسليم</option><option value="cancelled">ملغى</option><option value="refunded">مسترد</option></select></div><div id="ordersList" class="list"></div></section></section>
+<section class="view" id="view-customers"><section class="panel"><div class="section-head"><h2>العملاء</h2><button id="refreshCustomers" class="ghost small">تحديث</button></div><div id="customersList" class="list"></div></section></section>
+<section class="view" id="view-messages"><section class="panel"><div class="section-head"><h2>محادثات الدعم</h2><button id="refreshSupport" class="ghost small">تحديث</button></div><p class="hint">افتح المحادثة واختر لغة الترجمة، ثم اضغط «ترجمة الرسائل». النص الأصلي يبقى كما كتبه صاحبه.</p><div id="supportInbox" class="list"></div></section></section>
+<section class="view" id="view-promos"><section class="panel"><h2>كود خصم جديد</h2><div class="stack"><div class="two"><label>الكود<input id="couponCode" class="field" placeholder="WELCOME10"></label><label>النوع<select id="couponType" class="field"><option value="percent">نسبة %</option><option value="fixed">مبلغ ثابت $</option></select></label></div><div class="two"><label>القيمة<input id="couponValue" class="field" type="number" min="0" step="0.01"></label><label>الحد الأدنى للطلب<input id="couponMin" class="field" type="number" min="0" step="0.01" value="0"></label></div><button id="createCouponBtn" class="primary">إنشاء الكود</button><div id="couponMsg" class="msg"></div></div></section><section class="panel"><h2>أكواد الخصم</h2><div id="couponsList" class="list"></div></section></section>
+<section class="view" id="view-settings"><section class="panel"><h2>البيع والشحن</h2><div class="stack"><label>اسم المتجر<input id="storeName" class="field"></label><div class="two"><label>رسوم الشحن القياسية<input id="shippingFee" class="field" type="number" min="0" step="0.01"></label><label>شحن مجاني ابتداءً من<input id="freeShipping" class="field" type="number" min="0" step="0.01"></label></div><label>بريد الدعم<input id="supportEmail" class="field" type="email"></label><div class="toggle-list"><label><input id="checkoutEnabled" type="checkbox"> تفعيل إتمام الطلب</label><label><input id="stripeEnabled" type="checkbox"> الدفع الإلكتروني عبر Stripe</label><label><input id="codEnabled" type="checkbox"> الدفع عند الاستلام</label></div><button id="saveSettingsBtn" class="primary">حفظ الإعدادات</button><div id="settingsMsg" class="msg"></div></div></section></section>
+</section>
+</main>
+<div id="modal" class="modal" aria-hidden="true"><div id="modalCard" class="modal-card"></div></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="assets/makhraj-config.js?v=20260920-safety2"></script>
+<script src="assets/makhraj-i18n.js?v=20260920-safety2"></script>
+<script src="assets/makhraj-editor-v2.js?v=20260920-safety2"></script>
+<script src="assets/makhraj-seller-v3.js?v=20260920-safety2"></script>
 </body>
 </html>
