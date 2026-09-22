@@ -184,10 +184,33 @@
     renderAccount();
   }
   function catalogCategories(){
+    // Keep every active category, including categories without products.
     return state.categories.map(c=>{
       const products=state.products.filter(p=>p.category_id===c.id);
       return {...c,productCount:products.length,availableCount:products.filter(p=>totalStock(p)>0).length};
-    }).filter(c=>c.productCount>0);
+    });
+  }
+  function scrollToCatalog(anchor){
+    if(!anchor)return;
+    anchor.style.scrollMarginTop=(($('.topbar')?.getBoundingClientRect().height||80)+24)+'px';
+    anchor.scrollIntoView({behavior:'auto',block:'start'});
+    anchor.focus({preventScroll:true});
+  }
+  function backToCategories(){
+    selectCategory('all');
+    scrollToCatalog($('.category-heading')||$('#categoryShowcase'));
+  }
+  function renderCategoryView(){
+    const category=catalogCategories().find(c=>c.id===state.activeCategory);
+    els.home.classList.toggle('category-mode',!!category);
+    const header=$('#categoryViewHeader');
+    if(!header)return;
+    header.classList.toggle('hidden',!category);
+    if(category){
+      $('#categoryViewTitle').textContent=category.name;
+      $('#categoryViewSummary').textContent='عدد المنتجات في هذا القسم: '+category.productCount;
+    }
+    const back=$('#backToCategories');if(back)back.onclick=backToCategories;
   }
   function selectCategory(id,scroll=false){
     state.activeCategory=catalogCategories().some(c=>c.id===id)?id:'all';
@@ -198,19 +221,14 @@
       const stockOnly=$('#inStockOnly');if(stockOnly)stockOnly.checked=false;
     }
     renderCategories();renderCategoryShowcase();renderProducts();
-    if(scroll){
-      const anchor=$('#productsHeading')||els.grid;
-      anchor.style.scrollMarginTop=(($('.topbar')?.getBoundingClientRect().height||80)+24)+'px';
-      anchor.scrollIntoView({behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
-      anchor.focus({preventScroll:true});
-    }
+    if(scroll)scrollToCatalog((state.activeCategory!=='all'?$('#categoryViewHeader'):null)||$('#productsHeading')||els.grid);
   }
   function renderCategoryShowcase(){
     const box=$('#categoryShowcase');if(!box)return;
     const categories=catalogCategories();
     box.classList.toggle('hidden',!categories.length);
     $('.category-heading')?.classList.toggle('hidden',!categories.length);
-    box.innerHTML=categories.map(c=>'<button type="button" class="category-tile" data-cat-tile="'+c.id+'" aria-controls="productGrid" aria-pressed="'+(state.activeCategory===c.id)+'"><span>قسم</span><b>'+esc(c.name)+'</b><span class="tiny">عدد المنتجات: '+c.productCount+'</span><span class="arrow" aria-hidden="true">←</span></button>').join('');
+    box.innerHTML=categories.map(c=>'<button type="button" class="category-tile" data-cat-tile="'+c.id+'" aria-controls="productGrid" aria-pressed="'+(state.activeCategory===c.id)+'"><span>قسم</span><b>'+esc(c.name)+'</b><span class="tiny">'+(c.productCount?'عدد المنتجات: '+c.productCount:'لا توجد منتجات بعد')+'</span><span class="arrow" aria-hidden="true">←</span></button>').join('');
     $$('[data-cat-tile]',box).forEach(b=>b.onclick=()=>selectCategory(b.dataset.catTile,true));
   }
   function renderCategories(){
@@ -218,7 +236,7 @@
     if(state.activeCategory!=='all'&&!categories.some(c=>c.id===state.activeCategory))state.activeCategory='all';
     const all='<button type="button" class="chip '+(state.activeCategory==='all'?'on':'')+'" data-cat="all" aria-pressed="'+(state.activeCategory==='all')+'">الكل</button>';
     els.chips.innerHTML=all+categories.map(c=>'<button type="button" class="chip '+(state.activeCategory===c.id?'on':'')+'" data-cat="'+c.id+'" aria-pressed="'+(state.activeCategory===c.id)+'">'+esc(c.name)+' · '+c.productCount+'</button>').join('');
-    $$('.chip',els.chips).forEach(b=>b.onclick=()=>selectCategory(b.dataset.cat));
+    $$('.chip',els.chips).forEach(b=>b.onclick=()=>selectCategory(b.dataset.cat,true));
   }
   function filteredProducts(){
     const list=state.products.filter(p=>{
@@ -241,14 +259,18 @@
   }
   function totalStock(p){ return (p.product_variants||[]).reduce((s,v)=>s+Number(v.stock_quantity||0),0); }
   function renderProducts(){
+    renderCategoryView();
     const list=filteredProducts();
+    const category=state.categories.find(c=>c.id===state.activeCategory);
     const heading=$('#productsHeading');
-    if(heading)heading.textContent=state.categories.find(c=>c.id===state.activeCategory)?.name||'كل المنتجات';
+    if(heading)heading.textContent=category?.name||'كل المنتجات';
     els.count.textContent=list.length+' منتج';
     if(!list.length){
-      const message=!state.products.length?'لا توجد منتجات منشورة حاليًا.':state.search?'لا توجد نتائج لهذا البحث.':'لا توجد منتجات متوفرة ضمن الاختيار الحالي.';
-      els.grid.innerHTML='<div class="empty"><b>'+message+'</b>'+(state.products.length?'<br><button type="button" class="secondary" id="resetCatalogFilters" style="margin-top:12px">عرض جميع المنتجات</button>':'')+'</div>';
-      const reset=$('#resetCatalogFilters');if(reset)reset.onclick=()=>selectCategory('all');
+      const emptyCategory=category&&!state.products.some(p=>p.category_id===category.id);
+      const message=emptyCategory?'لا توجد منتجات في قسم «'+esc(category.name)+'» حتى الآن.':!state.products.length?'لا توجد منتجات منشورة حاليًا.':state.search?'لا توجد نتائج لهذا البحث.':'لا توجد منتجات متوفرة ضمن الاختيار الحالي.';
+      els.grid.innerHTML='<div class="empty"><b>'+message+'</b>'+(emptyCategory?'<p class="tiny">ستظهر هنا المنتجات التي تُضاف إلى هذا القسم.</p><button type="button" class="secondary" id="backToCategoryList">الرجوع إلى الأقسام</button>':state.products.length?'<br><button type="button" class="secondary" id="resetCatalogFilters" style="margin-top:12px">عرض جميع المنتجات</button>':'')+'</div>';
+      const back=$('#backToCategoryList');if(back)back.onclick=backToCategories;
+      const reset=$('#resetCatalogFilters');if(reset)reset.onclick=()=>{state.inStockOnly=false;const stockOnly=$('#inStockOnly');if(stockOnly)stockOnly.checked=false;selectCategory('all',true);};
       return;
     }
     els.grid.innerHTML=list.map(p=>{
@@ -283,7 +305,7 @@
       (variants.length?variants.map((v,i)=>'<button class="variant '+(i===0?'on':'')+'" data-variant="'+v.id+'">'+esc(v.title)+' · '+money(v.price??p.base_price)+' <span class="tiny">('+v.stock_quantity+')</span></button>').join(''):'<span class="danger">نفد المخزون</span>')+
       '</div><div class="line"><div class="qty"><button id="qtyMinus">−</button><b id="qtyValue">1</b><button id="qtyPlus">+</button></div><span class="tiny" id="stockText">'+(state.selectedVariant?'المتاح '+state.selectedVariant.stock_quantity:'')+'</span></div>'+
       '<div class="product-cta"><button class="primary" id="addToCartBtn" '+(!state.selectedVariant?'disabled':'')+'>أضف إلى السلة</button><button class="secondary" id="shareProductBtn">مشاركة المنتج</button></div>'+
-      '<div class="purchase-trust"><span>✓ السعر والمخزون يعاد التحقق منهما عند الطلب</span><span>✓ الدفع الإلكترونيوني عبر Stripe عند تفعيله</span></div>'+
+      '<div class="purchase-trust"><span>✓ السعر والمخزون يعاد التحقق منهما عند الطلب</span><span>✓ الدفع الإلكتروني عبر Stripe عند تفعيله</span></div>'+
       '<div class="section"><h2>التقييمات</h2><span class="tiny">من مشتريات مؤكدة</span></div><div id="reviewsArea"><div class="loading">جارٍ تحميل التقييمات…</div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('[data-fav]',els.panel).onclick=()=>{toggleFavorite(p.id);openProduct(p.id);};
@@ -569,6 +591,7 @@
   }
 
   function showView(view){
+    if(view==='home'&&state.activeCategory!=='all')selectCategory('all');
     els.home.classList.toggle('hidden',view!=='home');els.orders.classList.toggle('hidden',view!=='orders');els.account.classList.toggle('hidden',view!=='account');
     $$('.bottom button[data-view]').forEach(b=>b.classList.toggle('on',b.dataset.view===view));
     if(view==='orders') loadOrders();
@@ -632,7 +655,7 @@
   }
 
   function returnRequest(orderId){
-    openSheet('<div class="sheethead"><h2 style="margin:0">طلب إرجاع</h2><button class="close" data-close>×</button></div><p class="muted">اشرح سبب الإرجاع أو الاستبدال. الطلب يذهب إلى لوحة الإدارة للمراجعة.</p><textarea class="field" id="returnReason" rows="5" placeholder="سبب الإرجاع"></textarea><button class="primary" id="sendReturn" style="width:100%;margin-top:10px">إرسال الطلب</button><div id="returnMsg" class="tiny"></div>');
+    openSheet('<div class="sheethead"><h2 style="margin:0">طلب إرجاع</h2><button class="close" data-close>×</button></div><p class="muted">اشرح سبب الإرجاع أو الاستبدال. الطلب يذهب إلى لوحة الإدارة للمراجعة.</p><textarea class="field" id="returnReason" rows="5" placeholder="سبب الإرجاع"></textarea><button class="primary" id="sendReturn">إرسال الطلب</button><div id="returnMsg" class="tiny"></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('#sendReturn',els.panel).onclick=async()=>{
       const reason=$('#returnReason',els.panel).value.trim(),m=$('#returnMsg',els.panel);
@@ -662,7 +685,7 @@
   }
 
   function profileModal(){
-    openSheet('<div class="sheethead"><h2 style="margin:0">بياناتي</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="profileName" placeholder="الاسم الكامل" value="'+esc(state.profile?.full_name||'')+'"><input class="field" id="profilePhone" inputmode="tel" placeholder="رقم الهاتف" value="'+esc(state.profile?.phone||'')+'"><button class="primary" id="saveProfile">حفظ</button><div id="profileMsg" class="tiny"></div></div>');
+    openSheet('<div class="sheethead"><h2 style="margin:0">بياناتي</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="profileName" placeholder="الاسم الكامل" value="'+esc(state.profile?.full_name||'')+'"><input class="field" id="profilePhone" placeholder="رقم الهاتف" inputmode="tel" value="'+esc(state.profile?.phone||'')+'"><button class="primary" id="saveProfile">حفظ</button><div id="profileMsg" class="tiny"></div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('#saveProfile',els.panel).onclick=async()=>{
       const row={full_name:$('#profileName',els.panel).value.trim()||null,phone:$('#profilePhone',els.panel).value.trim()||null};
@@ -684,20 +707,20 @@
     const {data,error}=await sb.from('addresses').select('*').order('is_default',{ascending:false}).order('created_at',{ascending:false});
     if(error){area.innerHTML='<div class="error">تعذر تحميل العناوين.</div>';return}
     area.innerHTML='<div class="section"><h2>عناويني</h2><button class="secondary" id="newAddress">+ عنوان</button></div>'+
-      ((data||[]).length?(data||[]).map(a=>'<div class="summary"><div class="line"><div><b>'+esc(a.label||'عنوان')+'</b>'+(a.is_default?' <span class="badge">افتراضي</span>':'')+'<div class="muted">'+esc(a.recipient_name)+' · '+esc(a.phone||'')+'<br>'+esc(a.line1)+' '+esc(a.line2||'')+'<br>'+esc(a.city)+' '+esc(a.state||'')+' '+esc(a.postal_code||'')+'</div></div><button class="iconbtn" data-address="'+a.id+'">تعديل</button></div></div>').join(''):'<div class="empty">لم تحفظ أي عنوان بعد.</div>');
+      ((data||[]).length?(data||[]).map(a=>'<div class="summary"><div class="line"><b>'+esc(a.label||'عنوان')+'</b>'+(a.is_default?' <span class="badge">افتراضي</span>':'')+'</div><div class="muted">'+esc(a.recipient_name)+' · '+esc(a.phone||'')+'<br>'+esc(a.line1)+' '+esc(a.line2||'')+'<br>'+esc(a.city)+' '+esc(a.state||'')+' '+esc(a.postal_code||'')+'</div><button class="secondary" data-address="'+a.id+'">تعديل</button></div>').join(''):'<div class="empty">لم تحفظ أي عنوان بعد.</div>');
     $('#newAddress',area).onclick=()=>addressModal();
     $$('[data-address]',area).forEach(b=>b.onclick=()=>addressModal((data||[]).find(a=>a.id===b.dataset.address)));
   }
 
   function addressModal(a=null){
-    openSheet('<div class="sheethead"><h2 style="margin:0">'+(a?'تعديل العنوان':'عنوان جديد')+'</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="aLabel" placeholder="اسم العنوان: المنزل" value="'+esc(a?.label||'')+'"><input class="field" id="aName" placeholder="اسم المستلم" value="'+esc(a?.recipient_name||state.profile?.full_name||'')+'"><input class="field" id="aPhone" placeholder="الهاتف" inputmode="tel" value="'+esc(a?.phone||state.profile?.phone||'')+'"><input class="field" id="aLine1" placeholder="العنوان" value="'+esc(a?.line1||'')+'"><input class="field" id="aLine2" placeholder="تفاصيل إضافية" value="'+esc(a?.line2||'')+'"><div class="line"><input class="field" id="aCity" placeholder="المدينة" value="'+esc(a?.city||'')+'"><input class="field" id="aState" placeholder="الولاية" value="'+esc(a?.state||'')+'"></div><input class="field" id="aZip" placeholder="ZIP Code" value="'+esc(a?.postal_code||'')+'"><label class="tiny"><input type="checkbox" id="aDefault" '+(a?.is_default?'checked':'')+'> اجعله العنوان الافتراضي</label><button class="primary" id="saveAddressBtn">حفظ العنوان</button>'+(a?'<button class="secondary" id="deleteAddressBtn">حذف العنوان</button>':'')+'<div id="addressMsg" class="tiny"></div></div>');
+    openSheet('<div class="sheethead"><h2 style="margin:0">'+(a?'تعديل العنوان':'عنوان جديد')+'</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="aLabel" placeholder="اسم العنوان: المنزل" value="'+esc(a?.label||'')+'"><input class="field" id="aName" placeholder="اسم المستلم" value="'+esc(a?.recipient_name||state.profile?.full_name||'')+'"><input class="field" id="aPhone" placeholder="الهاتف" inputmode="tel" value="'+esc(a?.phone||'')+'"><input class="field" id="aLine1" placeholder="العنوان" value="'+esc(a?.line1||'')+'"><input class="field" id="aLine2" placeholder="تفاصيل إضافية" value="'+esc(a?.line2||'')+'"><div class="line"><input class="field" id="aCity" placeholder="المدينة" value="'+esc(a?.city||'')+'"><input class="field" id="aState" placeholder="الولاية" value="'+esc(a?.state||'')+'"></div><input class="field" id="aZip" placeholder="ZIP Code" value="'+esc(a?.postal_code||'')+'"><label class="tiny"><input type="checkbox" id="aDefault" '+(a?.is_default?'checked':'')+'> اجعله العنوان الافتراضي</label><button class="primary" id="saveAddressBtn">حفظ العنوان</button>'+(a?'<button class="secondary" id="deleteAddressBtn">حذف العنوان</button>':'')+'<div id="addressMsg" class="tiny"></div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('#saveAddressBtn',els.panel).onclick=async()=>{
       const row={user_id:state.session.user.id,label:$('#aLabel',els.panel).value.trim()||null,recipient_name:$('#aName',els.panel).value.trim(),phone:$('#aPhone',els.panel).value.trim()||null,line1:$('#aLine1',els.panel).value.trim(),line2:$('#aLine2',els.panel).value.trim()||null,city:$('#aCity',els.panel).value.trim(),state:$('#aState',els.panel).value.trim()||null,postal_code:$('#aZip',els.panel).value.trim()||null,country:'US',is_default:$('#aDefault',els.panel).checked};
       const m=$('#addressMsg',els.panel); if(!row.recipient_name||!row.line1||!row.city){m.textContent='الاسم والعنوان والمدينة مطلوبة.';m.className='danger';return}
       const q=a?sb.from('addresses').update(row).eq('id',a.id):sb.from('addresses').insert(row);
       const {error}=await q;if(error){m.textContent=error.message;m.className='danger';return}
-      closeSheet();renderAddresses();toast('تم حفظ العنوان');
+      closeModal();renderAddresses();toast('تم حفظ العنوان');
     };
     const del=$('#deleteAddressBtn',els.panel);if(del)del.onclick=async()=>{const {error}=await sb.from('addresses').delete().eq('id',a.id);if(error){$('#addressMsg',els.panel).textContent=error.message;return}closeSheet();renderAddresses();};
   }
