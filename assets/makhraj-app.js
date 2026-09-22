@@ -614,7 +614,7 @@
       : '';
     const canCancel=['pending','confirmed'].includes(o.status)&&['unpaid','failed'].includes(o.payment_status);
     openSheet('<div class="sheethead"><div><div class="tiny">تفاصيل الطلب</div><h2 style="margin:2px 0">MK-'+String(o.order_number).padStart(6,'0')+'</h2></div><button class="close" data-close>×</button></div>'+
-      '<div class="summary"><div class="line"><span>الحالة</span><b>'+statusLabel(o.status)+'</b></div><div class="line"><span>طريقة الطلب</span><b>'+paymentMethodLabel(o.payment_method)+'</b></div><div class="line"><span>الدفع</span><b>'+paymentLabel(o.payment_status)+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(o.total)+'</span></div></div>'+
+      '<div class="summary"><div class="line"><span>الحالة</span><b>'+statusLabel(o.status)+'</b></div><div class="line"><span>الدفع</span><b>'+paymentLabel(o.payment_status)+'</b></div><div class="line"><span>طريقة الطلب</span><b>'+paymentMethodLabel(o.payment_method)+'</b></div><div class="line total"><span>الإجمالي</span><span class="price">'+money(o.total)+'</span></div></div>'+
       (o.order_items||[]).map(i=>'<div class="cartrow"><div class="grow"><b>'+esc(i.product_name)+'</b><div class="tiny">'+esc(i.variant_title||'')+' × '+i.quantity+'</div></div><b>'+money(i.line_total)+'</b></div>').join('')+
       '<button class="secondary" id="reorderBtn" style="width:100%;margin-top:10px">أعد هذا الطلب</button>'+
       timeline+
@@ -655,7 +655,7 @@
   }
 
   function returnRequest(orderId){
-    openSheet('<div class="sheethead"><h2 style="margin:0">طلب إرجاع</h2><button class="close" data-close>×</button></div><p class="muted">اشرح سبب الإرجاع أو الاستبدال. الطلب يذهب إلى لوحة الإدارة للمراجعة.</p><textarea class="field" id="returnReason" rows="5" placeholder="سبب الإرجاع"></textarea><button class="primary" id="sendReturn">إرسال الطلب</button><div id="returnMsg" class="tiny"></div>');
+    openSheet('<div class="sheethead"><h2 style="margin:0">طلب إرجاع</h2><button class="close" data-close>×</button></div><p class="muted">اشرح سبب الإرجاع أو الاستبدال. الطلب يذهب إلى لوحة الإدارة للمراجعة.</p><textarea class="field" id="returnReason" rows="5" placeholder="سبب الإرجاع"></textarea><button class="primary" id="sendReturn" style="width:100%;margin-top:10px">إرسال الطلب</button><div id="returnMsg" class="tiny"></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('#sendReturn',els.panel).onclick=async()=>{
       const reason=$('#returnReason',els.panel).value.trim(),m=$('#returnMsg',els.panel);
@@ -685,7 +685,7 @@
   }
 
   function profileModal(){
-    openSheet('<div class="sheethead"><h2 style="margin:0">بياناتي</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="profileName" placeholder="الاسم الكامل" value="'+esc(state.profile?.full_name||'')+'"><input class="field" id="profilePhone" placeholder="رقم الهاتف" inputmode="tel" value="'+esc(state.profile?.phone||'')+'"><button class="primary" id="saveProfile">حفظ</button><div id="profileMsg" class="tiny"></div></div>');
+    openSheet('<div class="sheethead"><h2 style="margin:0">بياناتي</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="profileName" placeholder="الاسم الكامل" value="'+esc(state.profile?.full_name||'')+'"><input class="field" id="profilePhone" inputmode="tel" placeholder="رقم الهاتف" value="'+esc(state.profile?.phone||'')+'"><button class="primary" id="saveProfile">حفظ</button><div id="profileMsg" class="tiny"></div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('#saveProfile',els.panel).onclick=async()=>{
       const row={full_name:$('#profileName',els.panel).value.trim()||null,phone:$('#profilePhone',els.panel).value.trim()||null};
@@ -707,7 +707,7 @@
     const {data,error}=await sb.from('addresses').select('*').order('is_default',{ascending:false}).order('created_at',{ascending:false});
     if(error){area.innerHTML='<div class="error">تعذر تحميل العناوين.</div>';return}
     area.innerHTML='<div class="section"><h2>عناويني</h2><button class="secondary" id="newAddress">+ عنوان</button></div>'+
-      ((data||[]).length?(data||[]).map(a=>'<div class="summary"><div class="line"><b>'+esc(a.label||'عنوان')+'</b>'+(a.is_default?' <span class="badge">افتراضي</span>':'')+'</div><div class="muted">'+esc(a.recipient_name)+' · '+esc(a.phone||'')+'<br>'+esc(a.line1)+' '+esc(a.line2||'')+'<br>'+esc(a.city)+' '+esc(a.state||'')+' '+esc(a.postal_code||'')+'</div><button class="secondary" data-address="'+a.id+'">تعديل</button></div>').join(''):'<div class="empty">لم تحفظ أي عنوان بعد.</div>');
+      ((data||[]).length?(data||[]).map(a=>'<div class="summary"><div class="line"><div><b>'+esc(a.label||'عنوان')+'</b>'+(a.is_default?' <span class="badge">افتراضي</span>':'')+'<div class="muted">'+esc(a.recipient_name)+' · '+esc(a.phone||'')+'<br>'+esc(a.line1)+' '+esc(a.line2||'')+'<br>'+esc(a.city)+' '+esc(a.state||'')+' '+esc(a.postal_code||'')+'</div></div><button class="iconbtn" data-address="'+a.id+'">تعديل</button></div></div>').join(''):'<div class="empty">لم تحفظ أي عنوان بعد.</div>');
     $('#newAddress',area).onclick=()=>addressModal();
     $$('[data-address]',area).forEach(b=>b.onclick=()=>addressModal((data||[]).find(a=>a.id===b.dataset.address)));
   }
@@ -720,7 +720,7 @@
       const m=$('#addressMsg',els.panel); if(!row.recipient_name||!row.line1||!row.city){m.textContent='الاسم والعنوان والمدينة مطلوبة.';m.className='danger';return}
       const q=a?sb.from('addresses').update(row).eq('id',a.id):sb.from('addresses').insert(row);
       const {error}=await q;if(error){m.textContent=error.message;m.className='danger';return}
-      closeModal();renderAddresses();toast('تم حفظ العنوان');
+      closeSheet();renderAddresses();toast('تم حفظ العنوان');
     };
     const del=$('#deleteAddressBtn',els.panel);if(del)del.onclick=async()=>{const {error}=await sb.from('addresses').delete().eq('id',a.id);if(error){$('#addressMsg',els.panel).textContent=error.message;return}closeSheet();renderAddresses();};
   }
