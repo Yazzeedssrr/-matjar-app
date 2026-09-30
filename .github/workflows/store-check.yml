@@ -1,0 +1,55 @@
+name: Store frontend checks
+on:
+  push:
+    branches: [main]
+    paths:
+      - '*.html'
+      - 'assets/**'
+      - 'scripts/**'
+      - 'render.yaml'
+      - 'manifest.webmanifest'
+      - 'sw.js'
+      - '.github/workflows/store-check.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: store-check-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check JavaScript syntax
+        run: |
+          node --version
+          for script in assets/*.js scripts/*.mjs sw.js; do node --check "$script"; done
+      - name: Build public storefront package
+        run: node scripts/build-store.mjs
+      - name: Verify public package boundaries and local references
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json,re
+          root=Path('dist')
+          assert not (root/'supabase').exists()
+          assert not (root/'docs').exists()
+          assert not (root/'.github').exists()
+          assert not (root/'tests').exists()
+          for file in root.glob('*.html'):
+              text=file.read_text()
+              ids=re.findall(r'\bid="([^"]+)"',text)
+              assert len(ids)==len(set(ids)),f'Duplicate IDs in {file}'
+              for url in re.findall(r'(?:src|href)="([^"]+)"',text):
+                  url=url.split('?',1)[0].split('#',1)[0]
+                  if not url or url.startswith(('http:','https:','mailto:','tel:','data:')): continue
+                  assert (root/url).exists(),f'Missing local reference {url} in {file}'
+          manifest=json.loads((root/'manifest.webmanifest').read_text())
+          assert manifest['id']=='./app.html'
+          assert manifest['scope']=='./'
+          print('PASS: syntax, public build, references, unique IDs, excluded non-frontend files and stable app identity.')
+          PY
