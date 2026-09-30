@@ -31,6 +31,8 @@ jobs:
           for script in assets/*.js scripts/*.mjs sw.js; do node --check "$script"; done
       - name: Test account, payment and support safeguards
         run: node --test tests/*.cjs
+      - name: Test private backup verification and file restoration
+        run: python3 -m unittest discover -s tests -p "test_*.py"
       - name: Build public storefront package
         run: node scripts/build-store.mjs
       - name: Verify public package boundaries and local references

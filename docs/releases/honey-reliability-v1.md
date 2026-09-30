@@ -28,3 +28,9 @@ Render and Stripe plugins are discoverable but not connected here. Existing Edge
 Anonymous learning-event SECURITY DEFINER RPC remains callable and needs remediation after checking legacy telemetry dependencies. Leaked password protection remains disabled. Authenticated SECURITY DEFINER findings require individual authorization review, not blanket privilege removal; reviewed cancellation and support-creation functions check ownership.
 
 Full encrypted offsite database + image backup, isolated restoration, signed-in two-account support test, real supplier terms/sample, support contact, business/food/tax review, policies, commercial hosting and approved live financial tests remain mandatory. Owner selected diverse honey types as research direction; no supplier is approved and no stock was invented.
+
+## Backup tooling follow-up
+
+Added read-only `scripts/create-backup.py` for a PostgreSQL custom dump and every Storage object, using credentials supplied only through a trusted environment. It checks pg_restore listing, repeats object inventory, writes per-file SHA-256/size and bucket/name mapping, and refuses to overwrite an existing backup. It does not back up Stripe, provider settings outside PostgreSQL or browser drafts. Cross-system consistency requires a quiet window. Archive contains sensitive accounts/data and must be encrypted for offsite transfer.
+
+Added `scripts/verify-backup.py` with manifest, checksum, size, duplicate-entry, unsafe-path and symlink checks. File restoration writes only into a new local directory and refuses overwrite. Three fixture tests passed for byte-preserving extraction, overwrite refusal, corruption and traversal rejection. This is not an actual database restoration test. Live backup creation has NOT run: secure PostgreSQL/Storage credentials are not configured in this workspace. No secrets were requested in chat.
