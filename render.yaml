@@ -1,0 +1,33 @@
+# Deployment configuration only. No service or paid subscription is created by this file.
+services:
+  - type: web
+    name: makhraj-honey
+    runtime: static
+    buildCommand: node scripts/build-store.mjs
+    staticPublishPath: ./dist
+    envVars:
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: "camera=(), microphone=(), geolocation=()"
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+    routes:
+      - type: redirect
+        source: /admin.html
+        destination: /seller.html
+      - type: redirect
+        source: /store.html
+        destination: /app.html
