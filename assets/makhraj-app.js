@@ -66,7 +66,23 @@
   els.sheet.addEventListener('click',e=>{ if(e.target===els.sheet) closeSheet(); });
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSheet(); });
 
+  function readAuthReturn(){
+    const fragment=new URLSearchParams(location.hash.slice(1)),query=new URLSearchParams(location.search);
+    const error=fragment.get('error')||query.get('error');
+    const code=fragment.get('error_code')||query.get('error_code');
+    if(!error&&!code)return null;
+    // Never display or log raw provider descriptions, codes, or tokens.
+    let message='لم يكتمل تسجيل الدخول. حاول مرة أخرى أو استخدم البريد. إذا تكرر الخطأ تواصل مع الدعم.';
+    if(error==='access_denied')message='لم تُمنح موافقة الدخول، أو لا يسمح مزود الدخول بهذا الحساب. يمكنك المحاولة مجددًا أو استخدام البريد.';
+    if(code==='bad_oauth_state')message='انتهت محاولة الدخول أو لم تعد صالحة. ابدأ من زر تسجيل الدخول في المتجر مجددًا.';
+    if(code==='oauth2_exchange_failed')message='تعذر إكمال الدخول لدى مزود الحساب بسبب إعداد الربط. استخدم البريد مؤقتًا؛ لا تحتاج إلى تغيير كلمة مرور Google.';
+    for(const key of ['error','error_code','error_description'])query.delete(key);
+    history.replaceState({},'',location.pathname+(query.toString()?'?'+query:''));
+    return message;
+  }
+
   async function init(){
+    const authReturnError=readAuthReturn();
     const recoveryRequested=new URLSearchParams(location.hash.slice(1)).get('type')==='recovery';
     saveLocal();
     const { data:{ session } } = await sb.auth.getSession();
@@ -79,6 +95,7 @@
     await handlePaymentReturn();
     if(!initialParams.get('payment')) handleProductDeepLink(initialParams);
     if(recoveryRequested&&state.session)openPasswordRecovery();
+    if(authReturnError){showView('account');openAuth('login',authReturnError);}
   }
 
   async function handlePaymentReturn(){
@@ -137,6 +154,7 @@
       setTimeout(async()=>{
       if(event==='PASSWORD_RECOVERY'){state.session=session;openPasswordRecovery();return;}
       state.session=session;
+      renderAccount();
       if(session) await afterAuth(); else {
         state.profile=null;
         state.favs=new Set(safeJson('makhraj-favs-prod',[]));
@@ -580,10 +598,14 @@
     if(!isValidEmail(email)||!password){msg.textContent='اكتب بريدًا صحيحًا وكلمة المرور.';msg.className='danger';return;}
     msg.textContent='جارٍ تسجيل الدخول…';
     msg.className='tiny';btn.disabled=true;btn.textContent='جارٍ الدخول…';
-    const {error}=await sb.auth.signInWithPassword({email,password});
-    btn.disabled=false;btn.textContent='تسجيل الدخول';
-    if(error){msg.textContent=friendlyAuthError(error);msg.className='danger';return;}
-    await afterAuth();closeSheet();toast('أهلًا بك');render();
+    try{
+      const {data,error}=await sb.auth.signInWithPassword({email,password});
+      if(error){msg.textContent=friendlyAuthError(error);msg.className='danger';return;}
+      if(!data?.session){msg.textContent='لم تُنشأ جلسة دخول. حاول مجددًا.';msg.className='danger';return;}
+      state.session=data.session;renderAccount();closeSheet();toast('أهلًا بك');
+      await afterAuth();render();
+    }catch{if(msg.isConnected){msg.textContent='تعذر إكمال الدخول. تحقق من الاتصال وحاول مجددًا.';msg.className='danger';}}
+    finally{btn.disabled=false;btn.textContent='تسجيل الدخول';}
   }
   async function signup(){
     const msg=$('#authMsg',els.panel),btn=$('#authSubmit',els.panel),full_name=$('#authName',els.panel).value.trim(),email=$('#authEmail',els.panel).value.trim(),password=$('#authPass',els.panel).value;

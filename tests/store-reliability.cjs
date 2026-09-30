@@ -1,6 +1,23 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const {readFileSync}=require('node:fs');const vm=require('node:vm');
 const source=readFileSync('assets/makhraj-app.js','utf8');
 const extract=(a,b)=>source.slice(source.indexOf(a),source.indexOf(b));
+test('OAuth failure is explained safely and removed from the return URL',()=>{
+ const c={URLSearchParams,location:{pathname:'/app.html',search:'?keep=1',hash:'#error=server_error&error_code=oauth2_exchange_failed&error_description=secret-text'},history:{replaceState:(a,b,url)=>c.cleaned=url}};
+ vm.createContext(c);vm.runInContext(extract('  function readAuthReturn(','  async function init('),c);
+ assert.match(c.readAuthReturn(),/إعداد الربط/);assert.equal(c.cleaned,'/app.html?keep=1');assert.ok(!c.readAuthReturn().includes('secret-text'));
+});
+test('Successful token return and recovery are left for Supabase to consume',()=>{
+ for(const hash of ['#access_token=test&refresh_token=test&type=signup','#access_token=test&type=recovery']){
+ const c={URLSearchParams,location:{pathname:'/app.html',search:'',hash},history:{replaceState:()=>{throw Error('must not erase tokens')}}};
+ vm.createContext(c);vm.runInContext(extract('  function readAuthReturn(','  async function init('),c);assert.equal(c.readAuthReturn(),null);
+ }
+});
+test('Email login uses the returned session before rendering and unlocks after network failure',async()=>{
+ const nodes=new Map();const node=k=>{if(!nodes.has(k))nodes.set(k,{value:k==='#authEmail'?'a@example.com':'abcdef',isConnected:true});return nodes.get(k)};
+ const c={$:node,els:{panel:{}},state:{},isValidEmail:()=>true,friendlyAuthError:()=>'',afterAuth:async()=>{},closeSheet:()=>{},toast:()=>{},render:()=>{},renderAccount:()=>{assert.ok(c.state.session)},sb:{auth:{signInWithPassword:async()=>({data:{session:{user:{id:'test'}}}})}}};
+ vm.createContext(c);vm.runInContext(extract('  async function login(','  async function signup('),c);await c.login();assert.equal(c.state.session.user.id,'test');assert.equal(node('#authSubmit').disabled,false);
+ c.sb.auth.signInWithPassword=async()=>{throw Error('offline')};await c.login();assert.equal(node('#authSubmit').disabled,false);assert.match(node('#authMsg').textContent,/الاتصال/);
+});
 function harness(){
  const nodes=new Map();const node=k=>{if(!nodes.has(k))nodes.set(k,{value:'',textContent:'',innerHTML:'',disabled:false,isConnected:true});return nodes.get(k);};
  const c={state:{session:{user:{id:'owner'}},cart:[{qty:1}]},els:{panel:{}},calls:[],writes:0,paid:false,URLSearchParams,Date,setTimeout,console,
