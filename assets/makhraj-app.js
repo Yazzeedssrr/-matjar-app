@@ -67,6 +67,7 @@
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeSheet(); });
 
   async function init(){
+    const recoveryRequested=new URLSearchParams(location.hash.slice(1)).get('type')==='recovery';
     saveLocal();
     const { data:{ session } } = await sb.auth.getSession();
     state.session = session;
@@ -77,6 +78,7 @@
     const initialParams=new URLSearchParams(location.search);
     await handlePaymentReturn();
     if(!initialParams.get('payment')) handleProductDeepLink(initialParams);
+    if(recoveryRequested&&state.session)openPasswordRecovery();
   }
 
   async function handlePaymentReturn(){
@@ -86,10 +88,15 @@
     const orderId=params.get('order_id')||sessionStorage.getItem('makhraj-pending-order')||'';
     history.replaceState({},'',location.pathname);
     if(payment==='success'){
-      state.cart=[];saveLocal();sessionStorage.removeItem('makhraj-pending-order');
-      openSheet('<div style="text-align:center;padding:20px"><div class="mark" style="width:78px;height:78px;margin:0 auto 16px"></div><div class="tiny">Stripe Checkout</div><h2>تمت عملية الدفع</h2><p class="muted">نؤكد العملية من خادم Stripe الآن. ستظهر حالة الطلب «مدفوع» تلقائيًا فور وصول التأكيد.</p><button class="primary" id="paymentOrders" style="width:100%">عرض طلباتي</button></div>');
+      let verified=false;
+      if(state.session&&/^[0-9a-f-]{36}$/i.test(orderId)){
+        const {data,error}=await sb.from('orders').select('payment_status').eq('id',orderId).eq('user_id',state.session.user.id).maybeSingle();
+        verified=!error&&data?.payment_status==='paid';
+      }
+      if(verified){state.cart=[];saveLocal();sessionStorage.removeItem('makhraj-pending-order');}
+      openSheet('<div style="text-align:center;padding:20px"><div class="tiny">Stripe Checkout</div><h2>'+(verified?'تم تأكيد الدفع':'بانتظار تأكيد الدفع')+'</h2><p class="muted">'+(verified?'حالة الطلب في الخادم مدفوع.':'العودة من صفحة الدفع لا تؤكد تحصيل المبلغ. راجع حالة الطلب؛ إذا خُصم المبلغ فلا تكرر الدفع قبل التواصل مع الدعم.')+'</p><button class="primary" id="paymentOrders" style="width:100%">عرض طلباتي</button></div>');
       $('#paymentOrders',els.panel).onclick=()=>{closeSheet();showView('orders');};
-      window.MakhrajLearning?.event?.('order_created',{terms:window.MakhrajLearning?.getTerms?.()||[],context:{order_id:orderId,payment:'stripe'}});
+      if(verified)window.MakhrajLearning?.event?.('order_created',{terms:window.MakhrajLearning?.getTerms?.()||[],context:{order_id:orderId,payment:'stripe'}});
     }else if(payment==='cancelled'){
       if(orderId&&state.session){
         const {error}=await sb.functions.invoke('cancel-stripe-checkout',{body:{order_id:orderId}});
@@ -109,7 +116,7 @@
       const language=e.detail?.language;
       if(state.session && language){
         await sb.from('profiles').update({preferred_language:language}).eq('id',state.session.user.id);
-        if(state.activeSupportTicket) openTicket(state.activeSupportTicket);
+        // Preserve an unsent support reply when the interface language changes.
       }
     });
     $('#refreshBtn').onclick = async()=>{ await Promise.all([loadCategories(),loadProducts()]); render(); toast('تم تحديث المتجر'); };
@@ -125,7 +132,10 @@
         if(b.dataset.action==='smart') openSmart();
       };
     });
-    sb.auth.onAuthStateChange(async (_event,session)=>{
+    sb.auth.onAuthStateChange((event,session)=>{
+      // Defer Supabase calls until the auth callback releases its internal lock.
+      setTimeout(async()=>{
+      if(event==='PASSWORD_RECOVERY'){state.session=session;openPasswordRecovery();return;}
       state.session=session;
       if(session) await afterAuth(); else {
         state.profile=null;
@@ -133,6 +143,7 @@
         const adminTop=$('#adminTopBtn'); if(adminTop) adminTop.classList.add('hidden');
       }
       renderAccount();
+      },0);
     });
   }
 
@@ -521,6 +532,18 @@
     $('#authSubmit',els.panel).onclick=()=>mode==='login'?login():signup();
     const f=$('#forgotBtn',els.panel);if(f)f.onclick=forgotPassword;
   }
+  function openPasswordRecovery(){
+    openSheet('<div class="sheethead"><h2>تغيير كلمة المرور</h2></div><div class="formgrid"><input id="recoveryPassword" class="field" type="password" autocomplete="new-password" placeholder="كلمة المرور الجديدة"><input id="recoveryConfirm" class="field" type="password" autocomplete="new-password" placeholder="تأكيد كلمة المرور"><button id="saveRecovery" class="primary">حفظ كلمة المرور</button><div id="recoveryMsg" role="status"></div></div>');
+    $('#saveRecovery',els.panel).onclick=async e=>{
+      const button=e.currentTarget,msg=$('#recoveryMsg',els.panel),password=$('#recoveryPassword',els.panel).value;
+      if(button.disabled)return;
+      if(password.length<6||password!==$('#recoveryConfirm',els.panel).value){msg.textContent='أدخل كلمة مرور من 6 أحرف على الأقل وتأكيدًا مطابقًا.';return;}
+      button.disabled=true;
+      try{const {error}=await sb.auth.updateUser({password});if(error){msg.textContent=friendlyAuthError(error);return;}closeSheet();toast('تم تغيير كلمة المرور');}
+      catch{if(msg.isConnected)msg.textContent='تعذر الحفظ. تحقق من الاتصال وحاول مجددًا.';}
+      finally{button.disabled=false;}
+    };
+  }
   function friendlyAuthError(error){
     const text=String(error?.message||'حدث خطأ غير متوقع');
     if(/Invalid login credentials/i.test(text))return 'البريد أو كلمة المرور غير صحيحة.';
@@ -742,10 +765,13 @@
     openSheet('<div class="sheethead"><h2 style="margin:0">تذكرة دعم جديدة</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="ticketSubject" placeholder="عنوان المشكلة"><select class="field" id="ticketOrder"><option value="">بدون طلب مرتبط</option>'+(orders||[]).map(o=>'<option value="'+o.id+'">MK-'+String(o.order_number).padStart(6,'0')+'</option>').join('')+'</select><textarea class="field" id="ticketMessage" rows="5" placeholder="اشرح ما الذي تحتاج مساعدتنا فيه"></textarea><button class="primary" id="createTicketBtn">إرسال</button><div id="ticketMsg" class="tiny"></div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     $('#createTicketBtn',els.panel).onclick=async()=>{
+      const button=$('#createTicketBtn',els.panel);if(button.disabled)return;button.disabled=true;
+      try {
       const subject=$('#ticketSubject',els.panel).value.trim(),message=$('#ticketMessage',els.panel).value.trim(),orderId=$('#ticketOrder',els.panel).value||null,m=$('#ticketMsg',els.panel);
       const {data,error}=await sb.rpc('create_support_ticket',{p_subject:subject,p_message:message,p_order_id:orderId});
       if(error){m.textContent=error.message;m.className='danger';return}
-      toast('تم إرسال التذكرة');openTicket(data);
+      toast('تم إرسال التذكرة');await openTicket(data);
+      } catch {const messageBox=$('#ticketMsg',els.panel);if(messageBox)messageBox.textContent='تعذر الإرسال. تحقق من الاتصال قبل إعادة المحاولة.';} finally {button.disabled=false;}
     };
   }
 
@@ -758,14 +784,25 @@
     if(tErr||mErr){toast('تعذر فتح التذكرة');return}
     const target=localStorage.getItem('makhraj-support-language')||window.MakhrajI18n?.language||'ar';
     openSheet('<div class="sheethead"><div><div class="tiny">'+supportStatus(ticket.status)+'</div><h2 style="margin:2px 0">'+esc(ticket.subject)+'</h2></div><button class="close" data-close>×</button></div>'+
-      '<label class="tiny">لغة الترجمة<select id="supportTranslationLanguage" class="field">'+supportLanguageOptions(target)+'</select></label><div>'+
-      (messages||[]).map(m=>'<div class="summary support-message '+(m.is_staff?'staff':'customer')+'"><div class="tiny">'+(m.is_staff?'دعم مَخْرَج':'أنت')+' · '+new Date(m.created_at).toLocaleString()+'</div><div class="original-message">'+esc(m.message)+'</div><div class="translation-box" data-translation="'+m.id+'"></div></div>').join('')+
+      '<label class="tiny">لغة الترجمة<select id="supportTranslationLanguage" class="field">'+supportLanguageOptions(target)+'</select></label><p class="tiny">عند طلب الترجمة يُرسل نص الرسالة إلى مزود خارجي. الأصل محفوظ؛ راجع الأرقام والعناوين فيه.</p><button type="button" class="secondary" id="translateSupportThread">ترجمة الرسائل</button><div>'+
+      (messages||[]).map(m=>'<div class="summary support-message '+(m.is_staff?'staff':'customer')+'"><div class="tiny">'+(m.is_staff?'دعم مَخْرَج':'أنت')+' · '+new Date(m.created_at).toLocaleString()+'</div><div class="original-message" dir="auto" data-no-i18n>'+esc(m.message)+'</div><div class="translation-box" dir="auto" data-no-i18n data-translation="'+m.id+'"></div></div>').join('')+
       '</div>'+(ticket.status!=='closed'&&ticket.status!=='resolved'?'<div class="formgrid"><textarea class="field" id="replyMessage" rows="3" placeholder="اكتب ردك"></textarea><button class="primary" id="sendReply">إرسال الرد</button><div id="replyMsg" class="tiny"></div></div>':'<div class="notice">هذه التذكرة مغلقة.</div>'));
     $('[data-close]',els.panel).onclick=closeSheet;
-    $('#supportTranslationLanguage',els.panel).onchange=e=>{localStorage.setItem('makhraj-support-language',e.target.value);openTicket(ticketId)};
-    (messages||[]).forEach(m=>translateSupportMessage(m,target));
+    $('#supportTranslationLanguage',els.panel).onchange=e=>{
+      localStorage.setItem('makhraj-support-language',e.target.value);
+      $$('[data-translation]',els.panel).forEach(box=>{box.textContent='';});
+    };
+    $('#translateSupportThread',els.panel).onclick=async e=>{
+      const button=e.currentTarget,selector=$('#supportTranslationLanguage',els.panel);
+      if(button.disabled)return;
+      button.disabled=true;selector.disabled=true;
+      try { for(const message of messages||[]){if(!button.isConnected)break;await translateSupportMessage(message,selector.value);} }
+      finally {button.disabled=false;selector.disabled=false;}
+    };
     const btn=$('#sendReply',els.panel);if(btn)btn.onclick=async()=>{
       const text=$('#replyMessage',els.panel).value.trim(),m=$('#replyMsg',els.panel);if(!text){m.textContent='اكتب رسالة أولًا.';return}
+      if(btn.disabled)return;btn.disabled=true;
+      try {
       const {error}=await sb.from('support_messages').insert({
         ticket_id:ticketId,
         sender_user_id:state.session.user.id,
@@ -774,7 +811,8 @@
         source_language:'auto'
       });
       if(error){m.textContent=error.message;m.className='danger';return}
-      openTicket(ticketId);
+      await openTicket(ticketId);
+      } catch {if(m.isConnected)m.textContent='تعذر الإرسال. تحقق من الاتصال قبل إعادة المحاولة.';} finally {btn.disabled=false;}
     };
   }
 
@@ -787,7 +825,6 @@
     if(error||!data?.translated_text){box.innerHTML='<div class="translation-error">تعذر الترجمة الآن</div>';return}
     if(String(data.translated_text).trim()===String(message.message).trim()){box.innerHTML='';return}
     box.innerHTML='<div class="translation-label">الترجمة</div><div class="translated-message">'+esc(data.translated_text)+'</div>';
-    window.MakhrajI18n?.apply(box);
   }
 
   function supportStatus(s){return({open:'مفتوحة',waiting_customer:'بانتظارك',in_progress:'قيد المعالجة',resolved:'تم الحل',closed:'مغلقة'})[s]||s}

@@ -1,7 +1,9 @@
 // Publish only the store frontend, not SQL, private exports, tests, or old demo entry points.
-import { mkdir, readFile, writeFile, cp } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, cp, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 const out=resolve('dist');
+// dist is generated output only. Clear stale files before applying the allowlist.
+await rm(out,{recursive:true,force:true});
 await mkdir(out,{recursive:true});
 const pages=['app.html','seller.html','operations.html','information.html','manifest.webmanifest','sw.js'];
 for(const path of pages)await cp(path,resolve(out,path));

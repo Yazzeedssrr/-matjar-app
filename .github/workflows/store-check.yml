@@ -6,6 +6,7 @@ on:
       - '*.html'
       - 'assets/**'
       - 'scripts/**'
+      - 'tests/**'
       - 'render.yaml'
       - 'manifest.webmanifest'
       - 'sw.js'
@@ -28,6 +29,8 @@ jobs:
         run: |
           node --version
           for script in assets/*.js scripts/*.mjs sw.js; do node --check "$script"; done
+      - name: Test account, payment and support safeguards
+        run: node --test tests/*.cjs
       - name: Build public storefront package
         run: node scripts/build-store.mjs
       - name: Verify public package boundaries and local references
