@@ -1,7 +1,7 @@
 /* Cache only this app's public shell. Never clear IndexedDB, localStorage, or other apps' caches. */
 const SCOPE=new URL(self.registration.scope);
 const PREFIX='makhraj-shell-'+encodeURIComponent(SCOPE.pathname)+'-';
-const CACHE=PREFIX+'20260920-safety2';
+const CACHE=PREFIX+'honey-preview-v1';
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{
  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith(PREFIX)&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
