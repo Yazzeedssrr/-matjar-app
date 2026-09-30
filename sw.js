@@ -1,7 +1,7 @@
 /* Cache only this app's public shell. Never clear IndexedDB, localStorage, or other apps' caches. */
 const SCOPE=new URL(self.registration.scope);
 const PREFIX='makhraj-shell-'+encodeURIComponent(SCOPE.pathname)+'-';
-const CACHE=PREFIX+'honey-preview-v1';
+const CACHE=PREFIX+'honey-ops-v1';
 self.addEventListener('install',event=>{event.waitUntil(caches.open(CACHE).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{
  event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith(PREFIX)&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
@@ -10,7 +10,7 @@ self.addEventListener('fetch',event=>{
  const request=event.request,url=new URL(request.url);
  if(request.method!=='GET'||url.origin!==SCOPE.origin||!url.pathname.startsWith(SCOPE.pathname))return;
  const relative=url.pathname.slice(SCOPE.pathname.length);
- if(!/^(app\.html|seller\.html|manifest\.webmanifest|assets\/[A-Za-z0-9._/-]+\.(js|css|png|jpg|webp|svg))$/.test(relative))return;
+ if(!/^(app\.html|seller\.html|operations\.html|information\.html|manifest\.webmanifest|assets\/[A-Za-z0-9._/-]+\.(js|css|png|jpg|webp|svg))$/.test(relative))return;
  const key=new Request(new URL(relative,SCOPE).href);
  event.respondWith((async()=>{
   const cache=await caches.open(CACHE);
