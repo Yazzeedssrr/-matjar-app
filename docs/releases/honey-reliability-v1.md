@@ -10,14 +10,14 @@ Connected existing project fskfwngswatbetgxkmei is ACTIVE_HEALTHY. Operations mi
 
 - Customer support translation is explicit; opening a thread or changing its translation language does not send text to a provider. Changing the translation language preserves an unsent reply. Original and translated message bodies are excluded from interface text translation and use automatic text direction.
 - Ticket/reply buttons lock during an in-flight request. This prevents rapid repeated clicks, not server-side retry idempotency after a lost response.
-- A Stripe success return URL is not treated as payment proof. The owned order must be paid in the database before showing confirmation and clearing the local cart. Pending verification retains the cart and warns against repeating payment. Webhook remains the financial authority.
+- A Stripe success return URL is not treated as payment proof. The owned order must be paid in the database before showing confirmation; the current pending order must also match before clearing the local cart. Pending verification retains the cart and warns against repeating payment. Webhook remains the financial authority.
 - Added authenticated password-recovery form and matching-password validation. Supabase calls from auth state callbacks are deferred to avoid auth-lock reentrancy.
 - Public build clears generated dist output before applying its allowlist, preventing private stale files from surviving a rebuild. No user storage is cleared.
 - CI includes executable regression tests with controlled Supabase and DOM doubles.
 
 ## Tests and limits
 
-Five Node regression tests exercise translation consent, unsent reply retention, escaped text, rapid repeated reply clicks, unpaid versus paid return handling, recovery password matching, and stale build-file exclusion. Syntax and frontend build checked. These are controlled unit tests, not signed-in Safari or a real customer conversation.
+Six Node regression tests exercise translation consent, unsent reply retention, escaped text, rapid repeated reply clicks, unpaid versus paid return handling, recovery password matching, and stale build-file exclusion. Syntax and frontend build checked. These are controlled unit tests, not signed-in Safari or a real customer conversation.
 
 Local Chromium was unavailable. No iPhone, live checkout, supplier fulfillment, live refund, full database/image backup or isolated restore is claimed.
 

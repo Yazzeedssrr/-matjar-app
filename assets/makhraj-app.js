@@ -93,7 +93,7 @@
         const {data,error}=await sb.from('orders').select('payment_status').eq('id',orderId).eq('user_id',state.session.user.id).maybeSingle();
         verified=!error&&data?.payment_status==='paid';
       }
-      if(verified){state.cart=[];saveLocal();sessionStorage.removeItem('makhraj-pending-order');}
+      if(verified&&sessionStorage.getItem('makhraj-pending-order')===orderId){state.cart=[];saveLocal();sessionStorage.removeItem('makhraj-pending-order');}
       openSheet('<div style="text-align:center;padding:20px"><div class="tiny">Stripe Checkout</div><h2>'+(verified?'تم تأكيد الدفع':'بانتظار تأكيد الدفع')+'</h2><p class="muted">'+(verified?'حالة الطلب في الخادم مدفوع.':'العودة من صفحة الدفع لا تؤكد تحصيل المبلغ. راجع حالة الطلب؛ إذا خُصم المبلغ فلا تكرر الدفع قبل التواصل مع الدعم.')+'</p><button class="primary" id="paymentOrders" style="width:100%">عرض طلباتي</button></div>');
       $('#paymentOrders',els.panel).onclick=()=>{closeSheet();showView('orders');};
       if(verified)window.MakhrajLearning?.event?.('order_created',{terms:window.MakhrajLearning?.getTerms?.()||[],context:{order_id:orderId,payment:'stripe'}});
