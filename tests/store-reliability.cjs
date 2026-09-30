@@ -19,3 +19,15 @@ test('Recovery validates matching password and updates authenticated user',async
 test('Public build excludes stale private files on repeated builds',async()=>{const {mkdirSync,writeFileSync,existsSync}=require('node:fs');const {execFileSync}=require('node:child_process');mkdirSync('dist',{recursive:true});writeFileSync('dist/private-backup.json','private');execFileSync(process.execPath,['scripts/build-store.mjs']);assert.equal(existsSync('dist/private-backup.json'),false);assert.equal(existsSync('dist/app.html'),true);});
 
 test('Returning to an older paid order preserves the current cart',async()=>{const {c}=harness();c.paid=true;c.sessionStorage.getItem=()=> 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';await c.handlePaymentReturn();assert.equal(c.state.cart.length,1);});
+
+test('Social login only enables providers confirmed by server settings',async()=>{
+ const buttons=['google','apple','github'].map(authProvider=>({dataset:{authProvider},disabled:true,textContent:authProvider})),status={};
+ const c={cfg:{supabaseUrl:'https://example.supabase.co',supabaseKey:'public'},AbortController,setTimeout,clearTimeout,fetch:async()=>({ok:true,json:async()=>({external:{google:true,apple:false,github:false}})}),$$:()=>buttons,$:()=>status};
+ vm.createContext(c);vm.runInContext(extract('  function authRedirect(','  function openPasswordRecovery('),c);
+ await c.loadAuthProviders({isConnected:true});assert.equal(buttons[0].disabled,false);assert.equal(buttons[1].disabled,true);assert.equal(buttons[2].disabled,true);
+});
+test('Social login uses current storefront return URL and rejects unknown providers',async()=>{
+ const calls=[],c={location:{origin:'https://shop.example',pathname:'/-matjar-app/app.html'},sb:{auth:{signInWithOAuth:async args=>{calls.push(args);return {};}}},els:{panel:{}},$:()=>({isConnected:true})};
+ vm.createContext(c);vm.runInContext(extract('  function authRedirect(','  function openPasswordRecovery('),c);
+ const button={disabled:false};await c.socialLogin('unknown',button);assert.equal(calls.length,0);await c.socialLogin('google',button);assert.equal(calls[0].options.redirectTo,'https://shop.example/-matjar-app/app.html');assert.equal(button.disabled,false);
+});

@@ -531,6 +531,27 @@
       :'<div class="formgrid"><input class="field" id="authName" autocomplete="name" placeholder="الاسم الكامل"><input class="field" id="authEmail" type="email" inputmode="email" autocomplete="email" placeholder="البريد الإلكتروني"><input class="field" id="authPass" type="password" autocomplete="new-password" placeholder="كلمة المرور (6 أحرف على الأقل)"><button class="primary" id="authSubmit">إنشاء الحساب</button><div id="authMsg" class="tiny" aria-live="polite"></div><div class="auth-hint">بعد إنشاء الحساب قد يرسل النظام رابط تأكيد إلى بريدك. أبقِ هذه النافذة مفتوحة حتى ترى النتيجة.</div></div>';
     $('#authSubmit',els.panel).onclick=()=>mode==='login'?login():signup();
     const f=$('#forgotBtn',els.panel);if(f)f.onclick=forgotPassword;
+    const social=document.createElement('div');social.className='formgrid';social.innerHTML='<p class="tiny">أو استخدم حسابك لدى مزود تسجيل الدخول:</p>'+[['google','Google'],['apple','Apple'],['github','GitHub']].map(([key,label])=>'<button type="button" class="secondary" data-auth-provider="'+key+'" disabled>المتابعة باستخدام '+label+'</button>').join('')+'<p class="tiny" data-provider-status role="status">جارٍ التحقق من طرق الدخول المتاحة…</p>';
+    $('#authBody',els.panel).append(social);loadAuthProviders(social);
+  }
+  function authRedirect(){return location.origin+location.pathname;}
+  async function loadAuthProviders(container){
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),8000);
+    try{
+      const response=await fetch(cfg.supabaseUrl+'/auth/v1/settings',{headers:{apikey:cfg.supabaseKey},signal:controller.signal,cache:'no-store'});
+      if(!response.ok)throw new Error('settings');
+      const settings=await response.json();if(!container.isConnected)return;
+      $$('[data-auth-provider]',container).forEach(button=>{const provider=button.dataset.authProvider;button.disabled=settings.external?.[provider]!==true;button.onclick=()=>socialLogin(provider,button);if(button.disabled)button.textContent+=' — غير مفعّل بعد';});
+      $('[data-provider-status]',container).textContent='استخدم البريد الآن إذا كانت الطريقة التي تريدها غير مفعّلة. لا ندمج الحسابات المختلفة تلقائيًا من الواجهة.';
+    }catch{if(container.isConnected)$('[data-provider-status]',container).textContent='تعذر التحقق من طرق الدخول الأخرى. يمكنك استخدام البريد أو إعادة فتح هذه النافذة.';}
+    finally{clearTimeout(timer);}
+  }
+  async function socialLogin(provider,button){
+    if(button.disabled||!['google','apple','github'].includes(provider))return;
+    button.disabled=true;const msg=$('#authMsg',els.panel);
+    try{const {error}=await sb.auth.signInWithOAuth({provider,options:{redirectTo:authRedirect()}});if(error)throw error;}
+    catch{if(msg?.isConnected)msg.textContent='تعذر بدء الدخول بهذه الطريقة. استخدم البريد مؤقتًا أو حاول لاحقًا.';}
+    finally{button.disabled=false;}
   }
   function openPasswordRecovery(){
     openSheet('<div class="sheethead"><h2>تغيير كلمة المرور</h2></div><div class="formgrid"><input id="recoveryPassword" class="field" type="password" autocomplete="new-password" placeholder="كلمة المرور الجديدة"><input id="recoveryConfirm" class="field" type="password" autocomplete="new-password" placeholder="تأكيد كلمة المرور"><button id="saveRecovery" class="primary">حفظ كلمة المرور</button><div id="recoveryMsg" role="status"></div></div>');
@@ -571,11 +592,11 @@
     if(password.length<6){msg.textContent='كلمة المرور يجب أن تكون 6 أحرف على الأقل.';msg.className='danger';return;}
     msg.textContent='جارٍ إنشاء الحساب…';
     msg.className='tiny';btn.disabled=true;btn.textContent='جارٍ الإنشاء…';
-    const {data,error}=await sb.auth.signUp({email,password,options:{data:{full_name}}});
+    const {data,error}=await sb.auth.signUp({email,password,options:{data:{full_name},emailRedirectTo:authRedirect()}});
     btn.disabled=false;btn.textContent='إنشاء الحساب';
     if(error){msg.textContent=friendlyAuthError(error);msg.className='danger';return;}
     if(!data.session){
-      $('#authBody',els.panel).innerHTML='<div class="auth-success"><b>تم إنشاء الحساب.</b><br>أرسلنا رابط تأكيد إلى بريدك الإلكتروني. افتح الرابط من نفس الجهاز إن أمكن، ثم ارجع إلى مَخْرَج وسجّل الدخول.</div><button class="primary" id="backToLogin" style="width:100%;margin-top:10px">الانتقال لتسجيل الدخول</button>';
+      $('#authBody',els.panel).innerHTML='<div class="auth-success"><b>راجع بريدك الإلكتروني.</b><br>إذا كان التسجيل متاحًا لهذا البريد، ستصلك رسالة تأكيد. افتح الرابط من نفس الجهاز. إذا كان لديك حساب سابق، استخدم الدخول أو استعادة كلمة المرور.</div><button class="primary" id="backToLogin" style="width:100%;margin-top:10px">الانتقال لتسجيل الدخول</button>';
       $('#backToLogin',els.panel).onclick=()=>renderAuthBody('login');
       return;
     }
