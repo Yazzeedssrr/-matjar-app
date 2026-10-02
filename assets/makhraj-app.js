@@ -763,14 +763,26 @@
     const userId=state.session?.user?.id;if(!userId)return;
     openSheet('<div class="sheethead"><h2 style="margin:0">'+(first?'أكمل حسابك في مَخْرَج':'بياناتي')+'</h2><button class="close" data-close aria-label="إغلاق">×</button></div>'+
       (first?'<p class="muted">تم تسجيل الدخول بنجاح. راجع اسمك وأضف بياناتك لتسهيل الطلبات. يمكنك إكمالها لاحقًا من «بياناتي».</p>':'')+
-      '<div class="formgrid"><label>الاسم الكامل<input class="field" id="profileName" autocomplete="name" maxlength="100" value="'+esc(state.profile?.full_name||'')+'"></label><label>اسم المستخدم<input class="field" id="profileUsername" dir="ltr" autocomplete="username" maxlength="30" value="'+esc(state.profile?.username||'')+'"></label><p class="tiny">اسم المستخدم: 3 إلى 30 حرفًا إنجليزيًا صغيرًا أو رقمًا أو شرطة سفلية، دون مسافات.</p><label>رقم الهاتف<input class="field" id="profilePhone" type="tel" autocomplete="tel" maxlength="30" value="'+esc(state.profile?.phone||'')+'"></label><p class="tiny">العنوان اختياري الآن، ويمكن إضافته بعد الحفظ أو عند الطلب. اختر وسيلة الدفع عند الشراء؛ بيانات البطاقة تُدخل عبر صفحة الدفع الآمنة.</p><button class="primary" id="saveProfile">'+(first?'حفظ ومتابعة':'حفظ')+'</button>'+(first?'<button class="secondary" id="skipProfile">إكمال لاحقًا</button>':'')+'<div id="profileMsg" role="status"></div></div>');
+      '<div class="formgrid"><label>الاسم الكامل<input class="field" id="profileName" autocomplete="name" maxlength="100" value="'+esc(state.profile?.full_name||'')+'"></label><label>اسم المستخدم<input class="field" id="profileUsername" dir="ltr" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="30" value="'+esc(state.profile?.username||'')+'"></label><p class="tiny">اسم المستخدم: 3 إلى 30 حرفًا إنجليزيًا صغيرًا أو رقمًا أو شرطة سفلية، دون مسافات، مثل yazid_2026.</p><label>رقم الهاتف<input class="field" id="profilePhone" type="tel" autocomplete="tel" maxlength="30" value="'+esc(state.profile?.phone||'')+'"></label><p class="tiny">العنوان اختياري الآن، ويمكن إضافته بعد الحفظ أو عند الطلب. اختر وسيلة الدفع عند الشراء؛ بيانات البطاقة تُدخل عبر صفحة الدفع الآمنة.</p><div id="profileMsg" role="alert" aria-live="assertive"></div><button class="primary" id="saveProfile">'+(first?'حفظ ومتابعة':'حفظ')+'</button>'+(first?'<button class="secondary" id="skipProfile">إكمال لاحقًا</button>':'')+'</div>');
     $('[data-close]',els.panel).onclick=closeSheet;
     const skip=$('#skipProfile',els.panel);if(skip)skip.onclick=closeSheet;
     $('#saveProfile',els.panel).onclick=async()=>{
       const m=$('#profileMsg',els.panel),btn=$('#saveProfile',els.panel);
-      const full_name=$('#profileName',els.panel).value.trim(),username=$('#profileUsername',els.panel).value.trim().toLowerCase(),phone=$('#profilePhone',els.panel).value.trim();
-      if(full_name.length<2||!/^[a-z0-9_]{3,30}$/.test(username)||!/^\+?[0-9 ()-]+$/.test(phone)||phone.replace(/\D/g,'').length<10||phone.replace(/\D/g,'').length>15){m.textContent='تحقق من الاسم واسم المستخدم ورقم الهاتف (10 إلى 15 رقمًا).';return;}
-      btn.disabled=true;m.textContent='جارٍ الحفظ…';
+      if(btn.disabled)return;
+      const nameField=$('#profileName',els.panel),usernameField=$('#profileUsername',els.panel),phoneField=$('#profilePhone',els.panel);
+      const digits=value=>value.replace(/[٠-٩۰-۹]/g,ch=>String('٠١٢٣٤٥٦٧٨٩'.includes(ch)?'٠١٢٣٤٥٦٧٨٩'.indexOf(ch):'۰۱۲۳۴۵۶۷۸۹'.indexOf(ch)));
+      const full_name=nameField.value.trim(),username=digits(usernameField.value.trim()).toLowerCase(),phone=digits(phoneField.value.trim());
+      const showError=(message,field)=>{
+        m.textContent=message;m.className='danger';toast(message);
+        if(field){field.setAttribute?.('aria-invalid','true');field.focus?.();field.scrollIntoView?.({block:'center',behavior:'smooth'});}
+        else m.scrollIntoView?.({block:'center',behavior:'smooth'});
+      };
+      [nameField,usernameField,phoneField].forEach(field=>field.removeAttribute?.('aria-invalid'));
+      if(full_name.length<2){showError('اكتب اسمك الكامل (حرفان على الأقل).',nameField);return;}
+      if(!/^[a-z0-9_]{3,30}$/.test(username)){showError('اكتب اسم مستخدم من 3 إلى 30 حرفًا إنجليزيًا أو رقمًا أو _، مثل yazid_2026.',usernameField);return;}
+      if(!/^\+?[0-9 ()-]+$/.test(phone)||phone.replace(/\D/g,'').length<10||phone.replace(/\D/g,'').length>15){showError('اكتب رقم هاتف صحيحًا من 10 إلى 15 رقمًا، مع رمز الدولة عند الحاجة.',phoneField);return;}
+      usernameField.value=username;phoneField.value=phone;
+      btn.disabled=true;btn.textContent='جارٍ الحفظ…';m.className='';m.textContent='جارٍ الحفظ…';
       try{
         if(state.session?.user?.id!==userId)throw Error('تغير الحساب. افتح بياناتك مجددًا.');
         const row={full_name,username,phone,onboarding_completed_at:state.profile?.onboarding_completed_at||new Date().toISOString()};
@@ -779,8 +791,8 @@
         if(state.session?.user?.id!==userId)return;
         state.profile=data;closeSheet();renderAccount();toast('تم حفظ بياناتك');
         if(first){openSheet('<h2>حسابك جاهز</h2><p>هل تريد إضافة عنوان التوصيل الآن؟ يمكنك إضافته لاحقًا عند الطلب.</p><button class="primary" id="onboardingAddress">إضافة عنوان</button> <button class="secondary" id="onboardingDone">تصفح المتجر</button>');$('#onboardingAddress',els.panel).onclick=()=>addressModal();$('#onboardingDone',els.panel).onclick=closeSheet;}
-      }catch(error){if(m.isConnected){m.textContent=error.code==='23505'?'اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر.':'تعذر الحفظ. تحقق من الاتصال والبيانات وحاول مجددًا.';m.className='danger';}}
-      finally{btn.disabled=false;}
+      }catch(error){if(m.isConnected)showError(error.code==='23505'?'اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر.':'تعذر الحفظ. تحقق من الاتصال والبيانات وحاول مجددًا.',error.code==='23505'?usernameField:null);}
+      finally{btn.disabled=false;btn.textContent=first?'حفظ ومتابعة':'حفظ';}
     };
   }
 
