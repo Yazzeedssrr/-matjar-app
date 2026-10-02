@@ -123,6 +123,10 @@
   let margin=0,complete=live.length>0;for(const o of live){for(const i of o.order_items||[]){if(S.costs[i.variant_id]===undefined)complete=false;else margin+=Number(i.line_total)-S.costs[i.variant_id]*Number(i.quantity);}margin-=Number(o.discount_total||0);}
   $('mGrossProfit').textContent=complete?money(margin):'—';
   const tests=S.orders.filter(testOrder).length;
+  const testPaid=S.orders.filter(o=>o.payment_status==='paid'&&testOrder(o)).reduce((n,o)=>n+Number(o.total||0),0);
+  let testMetric=$('mTestRevenue');
+  if(!testMetric){const card=document.createElement('div');card.className='metric';card.innerHTML='<span>مدفوعات تجريبية — ليست إيرادًا</span><b id="mTestRevenue"></b>';$('mRevenue').closest('.metric-grid').append(card);testMetric=$('mTestRevenue');}
+  testMetric.textContent=money(testPaid);
   $('overviewFeed').innerHTML='<div class="card-row">'+tests+' طلب تجريبي مستبعد من الإيراد الحقيقي.</div><div class="card-row">'+low+' منتج بمخزون منخفض.</div><div class="hint">الإحصاءات تخص أحدث 100 طلب. المبيعات المدفوعة تستبعد مدفوعات الاختبار والدفعات غير المتحقق من نوعها. هامش المنتجات تقديري بالتكاليف الحالية وبعد خصم الطلب، وليس صافي الربح بعد الشحن والرسوم والضرائب والاستردادات.</div>';
   const active=S.products.filter(p=>p.status==='active');
   const checks=[['منتج منشور',active.length>0],['مخزون متوفر',active.some(p=>p.product_variants.some(v=>v.is_active&&v.stock_quantity>0))],['صور المنتجات',active.length>0&&active.every(p=>p.product_images.length>0)],['تكلفة مسجلة',active.length>0&&active.every(p=>p.product_variants.length>0&&p.product_variants.every(v=>S.costs[v.id]!==undefined))],['إتمام الطلب مفعّل',!!S.settings?.checkout_enabled],['إعداد Stripe مباشر',S.stripe?.mode==='live'&&S.stripe?.ready===true]];

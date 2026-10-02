@@ -24,7 +24,7 @@
 
   const state = {
     products: [], categories: [], activeCategory: 'all', search: '', sort: 'featured', inStockOnly: true,
-    session: null, profile: null, selectedProduct: null, selectedVariant: null, activeSupportTicket: null,
+    session: null, profile: null, onboardingPrompted: null, booting: true, selectedProduct: null, selectedVariant: null, activeSupportTicket: null,
     cart: safeJson('makhraj-cart-prod', []),
     settings:{free_shipping_threshold:cfg.freeShippingThreshold,standard_shipping_fee:cfg.standardShipping,currency:cfg.currency},
     favs: new Set(safeJson('makhraj-favs-prod', []))
@@ -96,6 +96,8 @@
     if(!initialParams.get('payment')) handleProductDeepLink(initialParams);
     if(recoveryRequested&&state.session)openPasswordRecovery();
     if(authReturnError){showView('account');openAuth('login',authReturnError);}
+    state.booting=false;
+    if(!recoveryRequested&&!authReturnError) maybeOnboard();
   }
 
   async function handlePaymentReturn(){
@@ -177,6 +179,13 @@
     }
     await syncLocalFavorites();
     await loadFavorites();
+    if(!state.booting) setTimeout(maybeOnboard,0);
+  }
+  function maybeOnboard(){
+    const id=state.session?.user?.id;
+    if(!id||!state.profile||state.profile.onboarding_completed_at||state.onboardingPrompted===id||$('#recoveryPassword',els.panel))return;
+    state.onboardingPrompted=id;
+    profileModal(true);
   }
   async function loadProfile(){
     if(!state.session) return;
@@ -740,7 +749,7 @@
       $('#accLogin').onclick=()=>openAuth('login');$('#accSignup').onclick=()=>openAuth('signup');return;
     }
     els.accountContent.innerHTML='<div class="card account-card"><div class="tiny">مسجل الدخول</div><h3>'+esc(state.profile?.full_name||state.session.user.email)+'</h3><div class="muted">'+esc(state.session.user.email)+'</div><div class="account-actions"><button class="secondary" id="accProfile">بياناتي</button><button class="secondary" id="accOrders">طلباتي</button><button class="secondary" id="accFavs">المفضلة</button><button class="secondary" id="accAddresses">عناويني</button><button class="secondary" id="accNotifications">الإشعارات</button><button class="secondary" id="accSupport">الدعم</button>'+(state.profile?.role==='admin'?'<button class="primary" id="accSeller">لوحة البائع</button>':'')+'<button class="secondary" id="accLogout">تسجيل الخروج</button></div></div><div id="favArea"></div><div id="accountExtra"></div>';
-    $('#accProfile').onclick=profileModal;
+    $('#accProfile').onclick=()=>profileModal();
     $('#accOrders').onclick=()=>showView('orders');
     $('#accFavs').onclick=()=>renderFavArea();
     $('#accAddresses').onclick=()=>renderAddresses();
@@ -750,14 +759,28 @@
     $('#accLogout').onclick=async()=>{await sb.auth.signOut();state.session=null;state.profile=null;toast('تم تسجيل الخروج');renderAccount();};
   }
 
-  function profileModal(){
-    openSheet('<div class="sheethead"><h2 style="margin:0">بياناتي</h2><button class="close" data-close>×</button></div><div class="formgrid"><input class="field" id="profileName" placeholder="الاسم الكامل" value="'+esc(state.profile?.full_name||'')+'"><input class="field" id="profilePhone" inputmode="tel" placeholder="رقم الهاتف" value="'+esc(state.profile?.phone||'')+'"><button class="primary" id="saveProfile">حفظ</button><div id="profileMsg" class="tiny"></div></div>');
+  function profileModal(first=false){
+    const userId=state.session?.user?.id;if(!userId)return;
+    openSheet('<div class="sheethead"><h2 style="margin:0">'+(first?'أكمل حسابك في مَخْرَج':'بياناتي')+'</h2><button class="close" data-close aria-label="إغلاق">×</button></div>'+
+      (first?'<p class="muted">تم تسجيل الدخول بنجاح. راجع اسمك وأضف بياناتك لتسهيل الطلبات. يمكنك إكمالها لاحقًا من «بياناتي».</p>':'')+
+      '<div class="formgrid"><label>الاسم الكامل<input class="field" id="profileName" autocomplete="name" maxlength="100" value="'+esc(state.profile?.full_name||'')+'"></label><label>اسم المستخدم<input class="field" id="profileUsername" dir="ltr" autocomplete="username" maxlength="30" value="'+esc(state.profile?.username||'')+'"></label><p class="tiny">اسم المستخدم: 3 إلى 30 حرفًا إنجليزيًا صغيرًا أو رقمًا أو شرطة سفلية، دون مسافات.</p><label>رقم الهاتف<input class="field" id="profilePhone" type="tel" autocomplete="tel" maxlength="30" value="'+esc(state.profile?.phone||'')+'"></label><p class="tiny">العنوان اختياري الآن، ويمكن إضافته بعد الحفظ أو عند الطلب. اختر وسيلة الدفع عند الشراء؛ بيانات البطاقة تُدخل عبر صفحة الدفع الآمنة.</p><button class="primary" id="saveProfile">'+(first?'حفظ ومتابعة':'حفظ')+'</button>'+(first?'<button class="secondary" id="skipProfile">إكمال لاحقًا</button>':'')+'<div id="profileMsg" role="status"></div></div>');
     $('[data-close]',els.panel).onclick=closeSheet;
+    const skip=$('#skipProfile',els.panel);if(skip)skip.onclick=closeSheet;
     $('#saveProfile',els.panel).onclick=async()=>{
-      const row={full_name:$('#profileName',els.panel).value.trim()||null,phone:$('#profilePhone',els.panel).value.trim()||null};
-      const {error}=await sb.from('profiles').update(row).eq('id',state.session.user.id);
-      if(error){$('#profileMsg',els.panel).textContent=error.message;$('#profileMsg',els.panel).className='danger';return}
-      await loadProfile();closeSheet();renderAccount();toast('تم حفظ بياناتك');
+      const m=$('#profileMsg',els.panel),btn=$('#saveProfile',els.panel);
+      const full_name=$('#profileName',els.panel).value.trim(),username=$('#profileUsername',els.panel).value.trim().toLowerCase(),phone=$('#profilePhone',els.panel).value.trim();
+      if(full_name.length<2||!/^[a-z0-9_]{3,30}$/.test(username)||!/^\+?[0-9 ()-]+$/.test(phone)||phone.replace(/\D/g,'').length<10||phone.replace(/\D/g,'').length>15){m.textContent='تحقق من الاسم واسم المستخدم ورقم الهاتف (10 إلى 15 رقمًا).';return;}
+      btn.disabled=true;m.textContent='جارٍ الحفظ…';
+      try{
+        if(state.session?.user?.id!==userId)throw Error('تغير الحساب. افتح بياناتك مجددًا.');
+        const row={full_name,username,phone,onboarding_completed_at:state.profile?.onboarding_completed_at||new Date().toISOString()};
+        const {data,error}=await sb.from('profiles').update(row).eq('id',userId).select('*').single();
+        if(error)throw error;
+        if(state.session?.user?.id!==userId)return;
+        state.profile=data;closeSheet();renderAccount();toast('تم حفظ بياناتك');
+        if(first){openSheet('<h2>حسابك جاهز</h2><p>هل تريد إضافة عنوان التوصيل الآن؟ يمكنك إضافته لاحقًا عند الطلب.</p><button class="primary" id="onboardingAddress">إضافة عنوان</button> <button class="secondary" id="onboardingDone">تصفح المتجر</button>');$('#onboardingAddress',els.panel).onclick=()=>addressModal();$('#onboardingDone',els.panel).onclick=closeSheet;}
+      }catch(error){if(m.isConnected){m.textContent=error.code==='23505'?'اسم المستخدم مستخدم بالفعل. اختر اسمًا آخر.':'تعذر الحفظ. تحقق من الاتصال والبيانات وحاول مجددًا.';m.className='danger';}}
+      finally{btn.disabled=false;}
     };
   }
 

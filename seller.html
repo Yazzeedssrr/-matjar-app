@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#070a0d">
 <title>إدارة مَخْرَج</title>
-<link rel="stylesheet" href="assets/makhraj-theme.css?v=20260920-safety2">
+<link rel="stylesheet" href="assets/makhraj-theme.css?v=account-onboarding-v1">
 <link rel="stylesheet" href="assets/makhraj-seller.css?v=20260920-safety2">
 <link rel="stylesheet" href="assets/makhraj-admin-safety.css?v=20260920-safety2">
 </head>
@@ -17,7 +17,7 @@
 <div class="connection-row"><span><i class="dot"></i> إدارة مَخْرَج</span><button id="logoutBtn" class="text-btn">تسجيل الخروج</button></div>
 <nav class="tabs" aria-label="أقسام الإدارة"><button class="tab active" data-tab="overview">نظرة عامة</button><button class="tab" data-tab="products">المنتجات</button><button class="tab" data-tab="orders">الطلبات</button><button class="tab" data-tab="customers">العملاء</button><button class="tab" data-tab="messages">الرسائل</button><button class="tab" data-tab="promos">الخصومات</button><button class="tab" data-tab="settings">الإعدادات</button></nav>
 <section class="view active" id="view-overview">
-<div class="metric-grid"><div class="metric"><span>المبيعات المدفوعة</span><b id="mRevenue">—</b></div><div class="metric profit-metric"><span>هامش المنتجات المقدر</span><b id="mGrossProfit">—</b></div><div class="metric"><span>الطلبات</span><b id="mOrders">—</b></div><div class="metric"><span>المنتجات المنشورة</span><b id="mProducts">—</b></div><div class="metric"><span>مخزون منخفض</span><b id="mLow">—</b></div></div>
+<div class="metric-grid"><div class="metric"><span>المبيعات الحقيقية المدفوعة</span><b id="mRevenue">—</b></div><div class="metric profit-metric"><span>هامش المنتجات المقدر</span><b id="mGrossProfit">—</b></div><div class="metric"><span>الطلبات</span><b id="mOrders">—</b></div><div class="metric"><span>المنتجات المنشورة</span><b id="mProducts">—</b></div><div class="metric"><span>مخزون منخفض</span><b id="mLow">—</b></div></div>
 <section class="panel launch-panel"><div class="section-head"><div><div class="eyebrow">التجهيز</div><h2>خطوات تجهيز المتجر</h2></div><span id="launchScore" class="launch-score">—</span></div><div id="launchChecklist" class="launch-checklist"></div><div class="launch-actions"><button class="secondary" id="goProductsBtn">المنتجات</button><button class="secondary" id="goSettingsBtn">إعدادات الدفع</button></div></section>
 <section class="panel"><div class="section-head"><div><div class="eyebrow">ما يحتاج انتباهك</div><h2>ملخص التشغيل</h2></div><button class="ghost small" id="refreshOverview">تحديث</button></div><div id="overviewFeed" class="list"></div></section>
 <section class="panel sandbox-note"><div class="eyebrow">الدفع</div><h2 id="paymentModeTitle">جارٍ التحقق…</h2><p id="paymentModeText">التحقق من إعدادات الدفع لا يغير المفاتيح أو بيئة Stripe.</p></section>
