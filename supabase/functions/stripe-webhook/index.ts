@@ -23,7 +23,7 @@ async function verifyStripeSignature(payload: string, header: string, secret: st
   const timestamp = parts.find((x) => x[0] === "t")?.[1];
   const signatures = parts.filter((x) => x[0] === "v1").map((x) => x[1]);
   if (!timestamp || !signatures.length) return false;
-  if (Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp)) > 300) return false;
+  if (!/^\d+$/.test(timestamp) || !Number.isFinite(Number(timestamp)) || Math.abs(Math.floor(Date.now() / 1000) - Number(timestamp)) > 300) return false;
 
   const key = await crypto.subtle.importKey(
     "raw",
@@ -52,46 +52,6 @@ async function rest(url: string, serviceKey: string, path: string, init: Request
     throw new Error(`supabase_rest_failed:${res.status}:${detail.slice(0, 500)}`);
   }
   return res;
-}
-
-async function beginEvent(
-  supabaseUrl: string,
-  serviceKey: string,
-  row: Record<string, unknown>,
-) {
-  const res = await rest(
-    supabaseUrl,
-    serviceKey,
-    "stripe_webhook_events?on_conflict=event_id",
-    {
-      method: "POST",
-      headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
-      body: JSON.stringify(row),
-    },
-  );
-  const inserted = await res.json().catch(() => []);
-  return Array.isArray(inserted) && inserted.length > 0;
-}
-
-async function finishEvent(
-  supabaseUrl: string,
-  serviceKey: string,
-  eventId: string,
-  error: string | null,
-) {
-  await rest(
-    supabaseUrl,
-    serviceKey,
-    `stripe_webhook_events?event_id=eq.${encodeURIComponent(eventId)}`,
-    {
-      method: "PATCH",
-      headers: { Prefer: "return=minimal" },
-      body: JSON.stringify({
-        processed_at: error ? null : new Date().toISOString(),
-        error,
-      }),
-    },
-  );
 }
 
 Deno.serve(async (req: Request) => {
@@ -124,98 +84,16 @@ Deno.serve(async (req: Request) => {
   const eventId = String(event?.id || "");
   if (!eventId) return new Response("missing event id", { status: 400 });
 
-  const obj = event?.data?.object || {};
-  const sessionId = obj?.id ? String(obj.id) : null;
-  const orderId = obj?.metadata?.order_id || obj?.client_reference_id || null;
-
   try {
-    const inserted = await beginEvent(supabaseUrl, serviceKey, {
-      event_id: eventId,
-      event_type: String(event.type),
-      checkout_session_id: sessionId,
-      order_id: orderId,
-      livemode: Boolean(event?.livemode),
+    const res = await rest(supabaseUrl, serviceKey, "rpc/process_stripe_checkout_event", {
+      method: "POST",
+      body: JSON.stringify({ p_event: event }),
     });
-
-    if (!inserted) {
-      return new Response("duplicate", { status: 200 });
-    }
-
-    if (
-      event.type === "checkout.session.completed" ||
-      event.type === "checkout.session.async_payment_succeeded"
-    ) {
-      if (!orderId || !sessionId) throw new Error("missing order metadata");
-
-      if (
-        obj.payment_status === "paid" ||
-        event.type === "checkout.session.async_payment_succeeded"
-      ) {
-        await rest(
-          supabaseUrl,
-          serviceKey,
-          `payments?checkout_session_id=eq.${encodeURIComponent(sessionId)}`,
-          {
-            method: "PATCH",
-            headers: { Prefer: "return=minimal" },
-            body: JSON.stringify({
-              status: "paid",
-              raw_status: obj.status || "complete",
-              provider_payment_id: obj.payment_intent || null,
-              payment_intent_id: obj.payment_intent || null,
-            }),
-          },
-        );
-
-        await rest(
-          supabaseUrl,
-          serviceKey,
-          `orders?id=eq.${encodeURIComponent(orderId)}&payment_status=neq.paid`,
-          {
-            method: "PATCH",
-            headers: { Prefer: "return=minimal" },
-            body: JSON.stringify({
-              payment_status: "paid",
-              status: "confirmed",
-            }),
-          },
-        );
-      }
-    } else if (
-      event.type === "checkout.session.expired" ||
-      event.type === "checkout.session.async_payment_failed"
-    ) {
-      if (sessionId) {
-        await rest(
-          supabaseUrl,
-          serviceKey,
-          `payments?checkout_session_id=eq.${encodeURIComponent(sessionId)}`,
-          {
-            method: "PATCH",
-            headers: { Prefer: "return=minimal" },
-            body: JSON.stringify({
-              status: "failed",
-              raw_status: event.type.includes("expired") ? "expired" : "failed",
-            }),
-          },
-        );
-      }
-
-      if (orderId) {
-        await rest(supabaseUrl, serviceKey, "rpc/release_online_order", {
-          method: "POST",
-          body: JSON.stringify({ p_order_id: orderId }),
-        });
-      }
-    }
-
-    await finishEvent(supabaseUrl, serviceKey, eventId, null);
+    const result = await res.json();
+    return new Response(result === "duplicate" ? "duplicate" : "ok", { status: 200 });
   } catch (err) {
-    const message = String((err as any)?.message || err).slice(0, 1000);
     console.error("webhook handling error", err);
-    await finishEvent(supabaseUrl, serviceKey, eventId, message).catch(() => {});
     return new Response("webhook handling failed", { status: 500 });
   }
 
-  return new Response("ok", { status: 200 });
 });
